@@ -50,6 +50,10 @@ def fn_scan_mango(camera_l, canera_r):
 		for j in range(1, scan_j):
 			driver_middle.set_goal_pos(int(scan_x/2) + scan_x * j)
 
+			driver_lift_l.wait_util_stop()
+			driver_lift_r.wait_util_stop()
+			driver_middle.wait_util_stop()
+
 			frame_l = camera_l.read()
 			frame_r = camera_r.read()
 			img_height_l, img_width_l = frame_l.shape[:2]

@@ -2,6 +2,7 @@ import time
 import hashlib
 import json
 import requests
+import datetime
 
 import pickle
 import numpy as np
@@ -26,6 +27,9 @@ class DriverMotor(object):
 		self.url_host = host
 		self.id = id
 		self.ppmm = 0
+
+		self.moving_threshold = 1
+		self.delay_time = 100 # ms
 
 		self.set_mode(1)
 
@@ -116,7 +120,23 @@ class DriverMotor(object):
 		except Exception as e:
 			raise e
 
+	def set_moving_threshould(self, th):
+		self.moving_threshold = th
+
 	def scan_working_length(self, pwm):
+
+	def wait_util_stop(self):
+		tmp_time = datetime.datetime.now()
+
+		while 1:
+			if (datetime.datetime.now - tmp_time).milliseonds <= self.delay_time:
+				continue
+
+			result = self.__post('status/motion')
+
+			cur_velo = result['cur_velo']
+			if cur_velo < self.moving_threshold:
+				break
 
 	def __post(self, action = 'status/motion', post = {}):
 		url = "{}/{}/{}".format(self.url_host, self.id, action)
