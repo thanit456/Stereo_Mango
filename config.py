@@ -13,10 +13,20 @@ CAMERA_END_EFFECTOR_ID = 2
 
 LASER_ID			= 10
 
+encoder_pulse_base_l	= 2000 * 4
+encoder_pulse_base_r	= 2000 * 4
+encoder_pulse_lift_l	= 2000 * 4
+encoder_pulse_lift_r	= 2000 * 4
+encoder_pulse_middle	= 2000 * 4
+encoder_pulse_turret	= 2000 * 4
+encoder_pulse_forward	= 2000 * 4
+
 url = "localhost:8080/api"
 
 camera_D0			= 128
-camera_focus_length = 50
+camera_focus_length1 = 50
+camera_focus_length2 = 50
+camera_focus_length3 = 50
 
 workspace_z			= 6000
 workspace_y			= 1800
