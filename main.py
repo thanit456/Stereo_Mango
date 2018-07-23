@@ -1,29 +1,15 @@
 import driver
 import config
 import cv2
+import datetime
+import visual_servoing as vservo
+import motion_control as mc
 from mango_database import Mango, MangoStorage
 from multiprocessing.dummy import Pool as ThreadPool
 
-driver_base_l = driver.DriverMotor(config.url, config.BASE_MOTOR_ID_L)
-driver_base_r = driver.DriverMotor(config.url, config.BASE_MOTOR_ID_R)
-driver_lift_l = driver.DriverMotor(config.url, config.LIFT_MOTOR_ID_L)
-driver_lift_r = driver.DriverMotor(config.url, config.LIFT_MOTOR_ID_R)
-driver_middle = driver.DriverMotor(config.url, config.MIDDLE_MOTOR_ID)
-driver_turret = driver.DriverMotor(config.url, config.TURRET_MOTOR_ID)
-driver_forward = driver.DriverMotor(config.url, config.FORWARD_MOTOR_ID)
-driver_end_effector = driver.DriverServo(config.url, config.END_EFFECTOR_MOTOR_ID)
 driver_ridar = driver.DriverLaser(config.url, config.LASER_ID)
 
 mango_detector = None
-
-driver_base_l.set_pulse_per_mm(config.encoder_pulse_base_l)
-driver_base_r.set_pulse_per_mm(config.encoder_pulse_base_r)
-driver_lift_l.set_pulse_per_mm(config.encoder_pulse_lift_l)
-driver_lift_r.set_pulse_per_mm(config.encoder_pulse_lift_r)
-driver_middle.set_pulse_per_mm(config.encoder_pulse_middle)
-driver_turret.set_pulse_per_mm(config.encoder_pulse_turret)
-driver_forward.set_pulse_per_mm(config.encoder_pulse_forward)
-# driver_end_effector
 
 
 def fn_scan_mango(camera_l, canera_r):
@@ -43,16 +29,13 @@ def fn_scan_mango(camera_l, canera_r):
 
 	list_mango = MangoStorage()
 
+	mc.update_current()
+
 	for i in range(1, scan_i):
-		driver_lift_l.set_goal_pos(int(scan_y/2) + scan_y * i)
-		driver_lift_r.set_goal_pos(int(scan_y/2) + scan_y * i)
+		mc.move_y(int(scan_y/2) + scan_y * i)
 
 		for j in range(1, scan_j):
-			driver_middle.set_goal_pos(int(scan_x/2) + scan_x * j)
-
-			driver_lift_l.wait_util_stop()
-			driver_lift_r.wait_util_stop()
-			driver_middle.wait_util_stop()
+			mc.move_x(int(scan_x/2) + scan_x * j)
 
 			frame_l = camera_l.read()
 			frame_r = camera_r.read()
@@ -65,9 +48,10 @@ def fn_scan_mango(camera_l, canera_r):
 			pool.close() 
 			pool.join()
 
-			curr_pos_x = int((driver_lift_r.get_current() - driver_lift_l.get_current()) * driver_middle.get_current() / workspace_x)
-			curr_pos_y = int((driver_lift_r.get_current() + driver_lift_l.get_current()) / 2.0)
-			curr_pos_z = int((driver_base_l.get_current() + driver_base_r.get_current()) / 2.0)
+			mc.update_current()
+			curr_pos_x = mc.current_pos_x
+			curr_pos_y = mc.current_pos_y
+			curr_pos_z = mc.current_pos_z
 
 			mango_len = min(len(list_mango_frame_l), len(list_mango_frame_r))
 
@@ -101,18 +85,17 @@ def fn_scan_object():
 	scan_j = int(workspace_x / scan_x)
 
 	for i in range(scan_i):
-		driver_lift_l.set_goal_pos(int(scan_y/2) + scan_y * i)
-		driver_lift_r.set_goal_pos(int(scan_y/2) + scan_y * i)
+		mc.move_y(int(scan_y/2) + scan_y * i)
 
 		ridar_length = []
 		for j in range(scan_j):
-			driver_middle.set_goal_pos(int(scan_x/2) + scan_x * j)
+			mc.move_x(int(scan_x/2) + scan_x * j)
 
 			ridar_length.append(driver_ridar.get_length())
 
 	return tree_radius
 
-def fb_carlibrate_stereo_camera(camera_l, camera_r):
+def fn_carlibrate_stereo_camera(camera_l, camera_r):
 	# make the Pool of workers
 	pool = ThreadPool(2)
 
@@ -122,3 +105,33 @@ def fb_carlibrate_stereo_camera(camera_l, camera_r):
 	# close the pool and wait for the work to finish 
 	pool.close() 
 	pool.join()
+
+def fn_keep_mango(list_mangos = []):
+	cam3 = DriverCamera(config.CAMERA_END_EFFECTOR_ID)
+	cam3.start()
+	vs = vservo.VS(cam3)
+	for mango in list_mangos:
+		pool = ThreadPool(1)
+		thread = pool.apply_async(vs.loop, ())
+		pool.close()
+
+		time = datetime.datetime.now()
+		flag = 0
+		while 1:
+			if thread.ready():
+				break
+
+			if (datetime.datetime.now() - time).total_seconds > 30:
+				flag = 1
+				break
+
+			# for i in range(100):
+			# 	pass
+
+		if flag == 1:
+			print ("Visual servo timeout while try to keep mango: x:{}, y:{}, z:{}".format(0, 0, 0))
+
+		mango.set_stored()
+
+	cam3.stop()
+
