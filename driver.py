@@ -98,9 +98,9 @@ class DriverMotor(object):
 		result_json = json.loads(result)
 
 		if self.mode == 1:
-			return result_json['cur_pos'] / self.ppmm
+			return [result_json['cur_pos'] / self.ppmm, result_json['cur_velo']]
 
-		return result_json['cur_pwm']
+		return [result_json['cur_pwm'], result_json['cur_velo']]
 
 	def get_others(self):
 		try:

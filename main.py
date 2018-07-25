@@ -3,7 +3,7 @@ import config
 import cv2
 import datetime
 import visual_servoing as vservo
-import motion_control as mc
+from motion_control import Planner
 from mango_database import Mango, MangoStorage
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -28,8 +28,6 @@ def fn_scan_mango(camera_l, canera_r):
 	scan_j = int(workspace_x / scan_x) + 1
 
 	list_mango = MangoStorage()
-
-	mc.update_current()
 
 	for i in range(1, scan_i):
 		mc.move_y(int(scan_y/2) + scan_y * i)
@@ -135,3 +133,6 @@ def fn_keep_mango(list_mangos = []):
 
 	cam3.stop()
 
+if __name__ == '__main__':
+	while 1:
+		Planner.getInstance().loop()

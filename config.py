@@ -30,8 +30,10 @@ camera_focus_length3 = 50
 
 workspace_z			= 6000
 workspace_y			= 1800
-workspace_x			= 3000
+workspace_x			= 4000
 
 scan_dist_interesting = 1500
 
 visual_time_delay 	= 2000 #ms
+
+planner_update_time = 10 #ms
