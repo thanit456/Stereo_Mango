@@ -1,12 +1,13 @@
 import driver
 import config
-import math
 import datetime
 import requests
+import numpy as np
 
 class Planner:
 	__instance = None
-	degToRad = math.pi / 180
+	degToRad = np.pi / 180
+	radToDeg = 180 * np.pi
 
 	@staticmethod
 	def getInstance():
@@ -39,10 +40,10 @@ class Planner:
 		self.driver_turret.set_pulse_per_mm(config.encoder_pulse_turret)
 		self.driver_forward.set_pulse_per_mm(config.encoder_pulse_forward)
 
-		self.position = [0 for i in range(5)] # middle, lift, base, turret, forward
-		self.goal_pos = [0 for i in range(5)] # middle, lift, base, turret, forward
-		self.velocity = [0 for i in range(5)] # middle, lift, base, turret, forward
-		self.goal_vel = [0 for i in range(5)] # middle, lift, base, turret, forward
+		self.position = [0 for i in range(7)] # middle, lift, base, turret, forward
+		self.goal_pos = [0 for i in range(7)] # middle, lift, base, turret, forward
+		self.velocity = [0 for i in range(7)] # middle, lift, base, turret, forward
+		self.goal_vel = [0 for i in range(7)] # middle, lift, base, turret, forward
 
 		self.delay_time = datetime.datetime.now()
 		self.update_count = 0
@@ -63,18 +64,47 @@ class Planner:
 		self.goal_pos[2] = pos
 
 	def move_arm_x(self, pos_mm, vel = 1):
-		pass
+		# prepare
+		x_left = pos_mm - self.position[0]
+		x = x_left if np.abs(x_left) < config.arm_workspace else (config.arm_dist_from_forward + config.arm_dist_from_joint_turret)
+		x_left = 0 if x == x_left else x_left - (config.arm_dist_from_forward + config.arm_dist_from_joint_turret) * (-1 if np.abs(x_left) < 0 else 1)
+
+		# pre outupt
+		z = self.position[6]
+		d = np.sqrt(x**2 + z**2) - config.arm_dist_from_joint_turret - config.arm_dist_from_forward
+		theta = np.arctan(y/x)
+
+		# set output
+		self.move_x(self.position[0] + x_left, vel)
+		self.goal_pos[3] = theta * Planner.radToDeg
+		self.goal_pos[4] = d
+
+	def move_arm_y(self, pos_mm, vel = 1):
+		self.move_y(pos_mm, vel)
 
 	def move_arm_z(self, pos_mm, vel = 1):
-		pass
+		# prepare
+		z_left = pos_mm - self.position[2]
+		z = x_left if np.abs(z_left) < config.arm_workspace else (config.arm_dist_from_forward + config.arm_dist_from_joint_turret)
+		z_left = 0 if x == z_left else z_left - (config.arm_dist_from_forward + config.arm_dist_from_joint_turret) * (-1 if np.abs(z_left) < 0 else 1)
+
+		# pre outupt
+		x = self.position[5]
+		d = np.sqrt(x**2 + z**2) - config.arm_dist_from_joint_turret - config.arm_dist_from_forward
+		theta = np.arctan(y/x)
+
+		# set output
+		self.move_z(self.position[2] + x_left, vel)
+		self.goal_pos[3] = theta * Planner.radToDeg
+		self.goal_pos[4] = d
 
 	def get_pos(self):
 		return self.position[:3]
 
 	def get_pos_arm(self):
-		return [self.position[0] + (self.position[4] / math.cos(self.position[3] * Planner.degToRad)), 
+		return [self.position[0] + self.position[5], 
 				self.position[1], 
-				self.position[2] + (self.position[4] / math.sin(self.position[3] * Planner.degToRad))]
+				self.position[2] + self.position[6]]
 
 	def loop(self):
 		diff_time = (datetime.datetime.now() - self.delay_time).total_milliseconds
@@ -97,6 +127,9 @@ class Planner:
 		self.position[2], self.velocity[2] = driver_base_l.get_current()
 		self.position[3], self.velocity[3] = driver_turret.get_current()
 		self.position[4], self.velocity[4] = driver_forward.get_current()
+		
+		self.position[5] = (config.arm_dist_from_joint_turret + config.arm_dist_from_forward + self.position[4]) * np.cos(self.position[3] * Planner.degToRad) # arm x
+		self.position[6] = (config.arm_dist_from_joint_turret + config.arm_dist_from_forward + self.position[4]) * np.sin(self.position[3] * Planner.degToRad) # arm y
 
 	def __send_position(self):
 		url = "{}/multi/status/set".format(config.url)
