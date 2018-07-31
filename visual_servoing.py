@@ -5,16 +5,19 @@ import driver
 import datetime
 from motion_control import Planner
 
-class VS(object):
-	"""docstring for VS"""
+class VS_Ojudge:
+	"""docstring for VS_Ojudge"""
 	def __init__(self, driver_camera):
-		super(VS, self).__init__()
 		self.camera = driver_camera
 
-		frame = self.__get_frame()
-		
+		frame = self.__get_frame()		
 
 		self.detector = None
+
+	def set_point_cloud(self, x, y, z):
+		self.target_x = x
+		self.target_y = y
+		self.target_z = z
 
 	def __get_frame(self):
 		return self.camera.read()
@@ -51,3 +54,15 @@ class VS(object):
 
 
 				prev_time = cur_time
+
+	def start(self):
+		self.__is_running = True
+		self.run()
+
+	def run(self):
+		while self.__is_running:
+			self.loop()
+		self.__is_running = False
+
+	def stop(self):
+		self.__is_running = False

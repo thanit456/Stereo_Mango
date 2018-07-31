@@ -3,8 +3,9 @@ import config
 import datetime
 import requests
 import numpy as np
+from threading import Thread
 
-class Planner:
+class Planner(Thread):
 	__instance = None
 	degToRad = np.pi / 180
 	radToDeg = 180 * np.pi
@@ -21,6 +22,7 @@ class Planner:
 		if Planner.__instance != None:
 			raise Exception("This class is a singleton!")
 		else:
+			Thread.__init__()
 			Planner.__instance = self
 
 		self.driver_base_l = driver.DriverMotor(config.url, config.BASE_MOTOR_ID_L)
@@ -47,23 +49,25 @@ class Planner:
 
 		self.delay_time = datetime.datetime.now()
 		self.update_count = 0
+
+		self.__is_running = True
 			
 	def __getattr__(self, name):
 		return getattr(self.instance, name)
 
-	def move_x(self, pos_mm, vel = 1):
+	def move_x(self, pos_mm, vel = 100):
 		pos = min(max(pos_mm, 0), config.workspace_x)
 		self.goal_pos[0] = pos
 
-	def move_y(self, pos_mm, vel = 1):
+	def move_y(self, pos_mm, vel = 100):
 		pos = min(max(pos_mm, 0), config.workspace_y)
 		self.goal_pos[1] = pos
 
-	def move_z(self, pos_mm, vel = 1):
+	def move_z(self, pos_mm, vel = 100):
 		pos = min(max(pos_mm, 0), config.workspace_z)
 		self.goal_pos[2] = pos
 
-	def move_arm_x(self, pos_mm, vel = 1):
+	def move_arm_x(self, pos_mm, vel = 100):
 		# prepare
 		x_left = pos_mm - self.position[0]
 		x = x_left if np.abs(x_left) < config.arm_workspace else (config.arm_dist_from_forward + config.arm_dist_from_joint_turret)
@@ -79,10 +83,10 @@ class Planner:
 		self.goal_pos[3] = theta * Planner.radToDeg
 		self.goal_pos[4] = d
 
-	def move_arm_y(self, pos_mm, vel = 1):
+	def move_arm_y(self, pos_mm, vel = 100):
 		self.move_y(pos_mm, vel)
 
-	def move_arm_z(self, pos_mm, vel = 1):
+	def move_arm_z(self, pos_mm, vel = 100):
 		# prepare
 		z_left = pos_mm - self.position[2]
 		z = x_left if np.abs(z_left) < config.arm_workspace else (config.arm_dist_from_forward + config.arm_dist_from_joint_turret)
@@ -110,8 +114,7 @@ class Planner:
 		diff_time = (datetime.datetime.now() - self.delay_time).total_milliseconds
 		if diff_time > config.planner_update_time:
 			for i in range(5):
-				flag = -config.planner_update_time if self.goal_pos[i] < 0 else config.planner_update_time
-				self.position[i] = self.position[i] + min(self.goal_vel[i], math.abs(self.goal_pos[i] - self.position[i])) * flag
+				self.position[i] = self.position[i] + max(0, math.abs(self.goal_pos[i] - self.position[i])) * diff_time * (-1 if self.goal_pos[i] < 0 else 1)
 
 			self.__send_position()
 			self.delay_time = datetime.datetime.now()
@@ -122,11 +125,11 @@ class Planner:
 			self.update_count = 0
 
 	def __update(self):
-		self.position[0], self.velocity[0] = driver_middle.get_current()
-		self.position[1], self.velocity[1] = driver_lift_l.get_current()
-		self.position[2], self.velocity[2] = driver_base_l.get_current()
-		self.position[3], self.velocity[3] = driver_turret.get_current()
-		self.position[4], self.velocity[4] = driver_forward.get_current()
+		self.position[0], self.velocity[0] = driver_middle.get_current() # mm, (pulse / ms)
+		self.position[1], self.velocity[1] = driver_lift_l.get_current() # mm, (pulse / ms)
+		self.position[2], self.velocity[2] = driver_base_l.get_current() # mm, (pulse / ms)
+		self.position[3], self.velocity[3] = driver_turret.get_current() # deg, (pulse / ms)
+		self.position[4], self.velocity[4] = driver_forward.get_current() # mm, (pulse / ms)
 		
 		self.position[5] = (config.arm_dist_from_joint_turret + config.arm_dist_from_forward + self.position[4]) * np.cos(self.position[3] * Planner.degToRad) # arm x
 		self.position[6] = (config.arm_dist_from_joint_turret + config.arm_dist_from_forward + self.position[4]) * np.sin(self.position[3] * Planner.degToRad) # arm y
@@ -137,25 +140,32 @@ class Planner:
 		data = {
 			"token": generate_otp(),
 			config.BASE_MOTOR_ID_L: {
-				"goal_pos": self.position[2] * config.encoder_pulse_base_l,
+				"goto_pos": self.position[2] * config.encoder_pulse_base_l, # pulse mm * (pulse per mm)
+				"goto_velo": self.velocity[2],
 			},
 			config.BASE_MOTOR_ID_R: {
-				"goal_pos": self.position[2] * config.encoder_pulse_base_r,
+				"goto_pos": self.position[2] * config.encoder_pulse_base_r, # pulse mm * (pulse per mm)
+				"goto_velo": self.velocity[2],
 			},
 			config.LIFT_MOTOR_ID_L: {
-				"goal_pos": self.position[1] * config.encoder_pulse_lift_l,
+				"goto_pos": self.position[1] * config.encoder_pulse_lift_l, # pulse mm * (pulse per mm)
+				"goto_velo": self.velocity[1],
 			},
 			config.LIFT_MOTOR_ID_R: {
-				"goal_pos": self.position[1] * config.encoder_pulse_lift_r,
+				"goto_pos": self.position[1] * config.encoder_pulse_lift_r, # pulse mm * (pulse per mm)
+				"goto_velo": self.velocity[1],
 			},
 			config.MIDDLE_MOTOR_ID: {
-				"goal_pos": self.position[0] * config.encoder_pulse_middle,
+				"goto_pos": self.position[0] * config.encoder_pulse_middle, # pulse mm * (pulse per mm)
+				"goto_velo": self.velocity[0],
 			},
 			config.TURRET_MOTOR_ID: {
-				"goal_pos": self.position[3] * config.encoder_pulse_turret,
+				"goto_pos": self.position[3] * config.encoder_pulse_turret, # pulse mm * (pulse per deg)
+				"goto_velo": self.velocity[3],
 			},
 			config.FORWARD_MOTOR_ID: {
-				"goal_pos": self.position[4] * config.encoder_pulse_forward,
+				"goto_pos": self.position[4] * config.encoder_pulse_forward, # pulse mm * (pulse per mm)
+				"goto_velo": self.velocity[4],
 			},
 		}
 
@@ -165,3 +175,11 @@ class Planner:
 
 		return json.loads(result.text)
 
+	def run(self):
+		while self.__is_running:
+			self.loop()
+
+		self.__is_running = False
+		
+	def stop(self):
+		self.__is_running = False
