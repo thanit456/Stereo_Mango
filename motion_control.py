@@ -10,6 +10,8 @@ class Planner(Thread):
 	degToRad = np.pi / 180
 	radToDeg = 180 * np.pi
 
+	sendMultiple = True
+
 	@staticmethod
 	def getInstance():
 		""" Static access method. """
@@ -135,45 +137,57 @@ class Planner(Thread):
 		self.position[6] = (config.arm_dist_from_joint_turret + config.arm_dist_from_forward + self.position[4]) * np.sin(self.position[3] * Planner.degToRad) # arm y
 
 	def __send_position(self):
-		url = "{}/multi/status/set".format(config.url)
-		
-		data = {
-			"token": generate_otp(),
-			config.BASE_MOTOR_ID_L: {
-				"goto_pos": self.position[2] * config.encoder_pulse_base_l, # pulse mm * (pulse per mm)
-				"goto_velo": self.velocity[2],
-			},
-			config.BASE_MOTOR_ID_R: {
-				"goto_pos": self.position[2] * config.encoder_pulse_base_r, # pulse mm * (pulse per mm)
-				"goto_velo": self.velocity[2],
-			},
-			config.LIFT_MOTOR_ID_L: {
-				"goto_pos": self.position[1] * config.encoder_pulse_lift_l, # pulse mm * (pulse per mm)
-				"goto_velo": self.velocity[1],
-			},
-			config.LIFT_MOTOR_ID_R: {
-				"goto_pos": self.position[1] * config.encoder_pulse_lift_r, # pulse mm * (pulse per mm)
-				"goto_velo": self.velocity[1],
-			},
-			config.MIDDLE_MOTOR_ID: {
-				"goto_pos": self.position[0] * config.encoder_pulse_middle, # pulse mm * (pulse per mm)
-				"goto_velo": self.velocity[0],
-			},
-			config.TURRET_MOTOR_ID: {
-				"goto_pos": self.position[3] * config.encoder_pulse_turret, # pulse mm * (pulse per deg)
-				"goto_velo": self.velocity[3],
-			},
-			config.FORWARD_MOTOR_ID: {
-				"goto_pos": self.position[4] * config.encoder_pulse_forward, # pulse mm * (pulse per mm)
-				"goto_velo": self.velocity[4],
-			},
-		}
+		if Planner.sendMultiple:
+			url = "{}/multi/status/set".format(config.url)
+			
+			data = {
+				"token": generate_otp(),
+				config.BASE_MOTOR_ID_L: {
+					"goto_pos": self.position[2] * config.encoder_pulse_base_l, # pulse mm * (pulse per mm)
+					"goto_velo": self.velocity[2],
+				},
+				config.BASE_MOTOR_ID_R: {
+					"goto_pos": self.position[2] * config.encoder_pulse_base_r, # pulse mm * (pulse per mm)
+					"goto_velo": self.velocity[2],
+				},
+				config.LIFT_MOTOR_ID_L: {
+					"goto_pos": self.position[1] * config.encoder_pulse_lift_l, # pulse mm * (pulse per mm)
+					"goto_velo": self.velocity[1],
+				},
+				config.LIFT_MOTOR_ID_R: {
+					"goto_pos": self.position[1] * config.encoder_pulse_lift_r, # pulse mm * (pulse per mm)
+					"goto_velo": self.velocity[1],
+				},
+				config.MIDDLE_MOTOR_ID: {
+					"goto_pos": self.position[0] * config.encoder_pulse_middle, # pulse mm * (pulse per mm)
+					"goto_velo": self.velocity[0],
+				},
+				config.TURRET_MOTOR_ID: {
+					"goto_pos": self.position[3] * config.encoder_pulse_turret, # pulse mm * (pulse per deg)
+					"goto_velo": self.velocity[3],
+				},
+				config.FORWARD_MOTOR_ID: {
+					"goto_pos": self.position[4] * config.encoder_pulse_forward, # pulse mm * (pulse per mm)
+					"goto_velo": self.velocity[4],
+				},
+			}
 
-		result = requests.post(url, data=data)
-		if (result.status_code != 200)
-			print ('HTTP Error: {}'.format(result.status_code))
+			result = requests.post(url, data=data)
+			if (result.status_code != 200)
+				print ('HTTP Error: {}'.format(result.status_code))
 
-		return json.loads(result.text)
+			# return json.loads(result.text)
+		else:
+			try:
+				self.driver_base_l.set_goal_pos(self.position[2], self.velocity[2])
+				self.driver_base_r.set_goal_pos(self.position[2], self.velocity[2])
+				self.driver_lift_l.set_goal_pos(self.position[1], self.velocity[1])
+				self.driver_lift_r.set_goal_pos(self.position[1], self.velocity[1])
+				self.driver_middle.set_goal_pos(self.position[0], self.velocity[0])
+				self.driver_turret.set_goal_pos(self.position[3], self.velocity[3])
+				self.driver_forward.set_goal_pos(self.position[4], self.velocity[4])
+			except Exception as e:
+				print (e)
 
 	def run(self):
 		while self.__is_running:

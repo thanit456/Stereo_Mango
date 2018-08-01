@@ -42,13 +42,10 @@ class DriverMotor(object):
 		if self.ppmm == 0:
 			raise Exception('Set pulse per mm before call this function.')
 
-		url = "{}/{}/eeprom/set".format(self.url_host, self.id)
-		result = requests.post(url, data={"token": generate_otp(), "max_pos": max_m * self.ppmm})
-
-		if (result.status_code != 200)
-			raise Exception('HTTP Error: {}'.format(result.status_code))
-
-		return json.loads(result.text)
+		try:
+			return self.__post('eeprom/set', {"max_pos": self.max_length * self.ppmm})
+		except Exception as e:
+			raise e
 
 	def set_min_movement(self, min_m):
 		self.min_length = min_m
@@ -56,13 +53,10 @@ class DriverMotor(object):
 		if self.ppmm == 0:
 			raise Exception('Set pulse per mm before call this function.')
 
-		url = "{}/{}/eeprom/set".format(self.url_host, self.id)
-		result = requests.post(url, data={"token": generate_otp(), "min_pos": -1 * min_m * self.ppmm})
-
-		if (result.status_code != 200)
-			raise Exception('HTTP Error: {}'.format(result.status_code))
-
-		return json.loads(result.text)
+		try:
+			return self.__post('eeprom/set', {"min_pos": self.min_length * self.ppmm})
+		except Exception as e:
+			raise e
 	
 	def set_mode(self, mode = 1):
 		self.mode = mode
@@ -114,9 +108,9 @@ class DriverMotor(object):
 		except Exception as e:
 			raise e
 
-	def set_goal_pos(self, pos)
+	def set_goal_pos(self, pos, vel = 100)
 		try:
-			return self.__post('status/set', {"goal_pos": pos * self.ppmm})
+			return self.__post('status/set', {"goto_pos": pos * self.ppmm, "goto_velo": vel})
 		except Exception as e:
 			raise e
 
@@ -150,26 +144,26 @@ class DriverMotor(object):
 
 		return json.loads(result.text)
 
-class DriverServo(object):
-	"""docstring for DriverServo"""
-	def __init__(self, host, id):
-		super(DriverServo, self).__init__()
-		self.url_host = host
-		self.id = id
-		self.ppdeg = 0
+# class DriverServo(object):
+# 	"""docstring for DriverServo"""
+# 	def __init__(self, host, id):
+# 		super(DriverServo, self).__init__()
+# 		self.url_host = host
+# 		self.id = id
+# 		self.ppdeg = 0
 		
-	def set_pulse_per_deg(self, ppdeg):
-		self.ppdeg = ppdeg
+# 	def set_pulse_per_deg(self, ppdeg):
+# 		self.ppdeg = ppdeg
 
-class DriverLaser(object):
-	"""docstring for DriverLaser"""
-	def __init__(self, host, id):
-		super(DriverLaser, self).__init__()
-		self.url_host = host
-		self.id = id
+# class DriverLaser(object):
+# 	"""docstring for DriverLaser"""
+# 	def __init__(self, host, id):
+# 		super(DriverLaser, self).__init__()
+# 		self.url_host = host
+# 		self.id = id
 
-	def get_length(self):
-		pass
+# 	def get_length(self):
+# 		pass
 		
 class DriverCamera(object):
 	"""docstring for DriverCamera"""

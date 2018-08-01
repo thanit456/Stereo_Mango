@@ -46,5 +46,7 @@ arm_workspace = arm_forward_max_length + arm_dist_from_joint_forward + arm_dist_
 
 # section algorithm
 scan_dist_interesting = 1500
-visual_time_delay 	= 2000 #ms
+visual_time_delay 	= 2000 # ms
+visual_radius_accept = 10
+visual_forward_length = 100 # mm
 planner_update_time = 4 + 1.5 + 3.5 * (7 - 1) #ms

@@ -34,11 +34,15 @@ class VS_Ojudge:
 		cur_pos = planner.get_pos_arm()
 		prev_time = cur_time = datetime.datetime.now()
 
-		while 1:
-			cur_time = datetime.datetime.now()
-			cur_pos = planner.get_pos()
+		planner.move_arm_x(self.target_x)
+		planner.move_arm_y(self.target_y)
+		# planner.move_arm_z(self.target_z)
 
-			if (cur_time - prev_time).milliseconds >= config.time_delay:
+		while self.__is_running:
+			cur_time = datetime.datetime.now()
+
+			if (cur_time - prev_time).milliseconds >= config.visual_time_delay:
+				cur_pos = planner.get_pos()
 				
 				# move servo
 				frame = self.__get_frame()
@@ -51,7 +55,11 @@ class VS_Ojudge:
 				diff_x = mango_center[0] - frame_center[0]
 				diff_y = mango_center[1] - frame_center[1]
 
+				planner.move_arm_x(cur_pos[0] + diff_x)
+				planner.move_arm_y(cur_pos[1] + diff_y)
 
+				if np.sqrt(diff_x**2 + diff_y**2) <= config.visual_radius_accept:
+					planner.move_arm_z(cur_pos[2] + config.visual_forward_length)
 
 				prev_time = cur_time
 
@@ -60,8 +68,7 @@ class VS_Ojudge:
 		self.run()
 
 	def run(self):
-		while self.__is_running:
-			self.loop()
+		self.loop()
 		self.__is_running = False
 
 	def stop(self):
