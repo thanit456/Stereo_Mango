@@ -89,6 +89,9 @@ class Harvest(Thread):
 						y1 = (list_mango_frame_l[k, 1] - (img_width_l / 2)) * d / config.camera_focus_length1 + camera_l.offset_y # mm
 						y2 = (list_mango_frame_r[k, 1] - (img_width_r / 2)) * d / config.camera_focus_length2 + camera_r.offset_y # mm
 
+						x = (x1 + x2) / 2
+						y = (y1 + y2) / 2
+
 						if d <= config.scan_dist_interesting:
 							vs = VS_Ojudge(self.cam_3)
 							vs.set_point_cloud(curr_pos_x + x, curr_pos_y + y, curr_pos_z + d)
