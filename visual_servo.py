@@ -5,8 +5,8 @@ import driver
 import datetime
 from motion_control import Planner
 
-class VS_Ojudge:
-	"""docstring for VS_Ojudge"""
+class VisualServo:
+	"""docstring for VisualServo"""
 	def __init__(self, driver_camera):
 		self.camera = driver_camera
 
