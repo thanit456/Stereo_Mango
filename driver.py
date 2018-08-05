@@ -18,7 +18,6 @@ def generate_otp():
 	h.update(timestamp.encode() + secret_key)
 	return h.digest()[:8].hex()+timestamp
 
-
 class DriverMotor:
 	"""docstring for DriverMotor"""
 	def __init__(self, host, id):

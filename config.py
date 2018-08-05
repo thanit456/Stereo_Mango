@@ -41,7 +41,8 @@ workspace_x			= 4000
 arm_dist_from_joint_turret = 1000
 arm_dist_from_joint_forward = 1000
 arm_forward_max_length = 1000
-arm_workspace = arm_forward_max_length + arm_dist_from_joint_forward + arm_dist_from_joint_turret
+arm_min_workspace = arm_forward_max_length + arm_dist_from_joint_forward
+arm_max_workspace = arm_min_workspace + arm_dist_from_joint_turret
 
 
 # section algorithm
