@@ -102,13 +102,13 @@ class DriverMotor(object):
 		except Exception as e:
 			raise e
 
-	def set_goal_pwm(self, pwm)
+	def set_goal_pwm(self, pwm):
 		try:
 			return self.__post('status/set', {"goal_pwm": pwm})
 		except Exception as e:
 			raise e
 
-	def set_goal_pos(self, pos, vel = 100)
+	def set_goal_pos(self, pos, vel = 100):
 		try:
 			return self.__post('status/set', {"goto_pos": pos * self.ppmm, "goto_velo": vel})
 		except Exception as e:
@@ -117,7 +117,7 @@ class DriverMotor(object):
 	def set_moving_threshould(self, th):
 		self.moving_threshold = th
 
-	def scan_working_length(self, pwm):
+	#def scan_working_length(self, pwm):
 
 	def wait_util_stop(self):
 		tmp_time = datetime.datetime.now()
@@ -139,7 +139,7 @@ class DriverMotor(object):
 		data.append(post)
 
 		result = requests.post(url, data=data)
-		if (result.status_code != 200)
+		if (result.status_code != 200):
 			raise Exception('HTTP Error: {}'.format(result.status_code))
 
 		return json.loads(result.text)
