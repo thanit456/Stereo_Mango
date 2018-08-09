@@ -98,37 +98,58 @@ class Planner:
 		if is_set is False:
 			self._send_position()		
 
-	def move_to_single_cam(self, x_pos, y_pos, z_pos, speed):
+	def move_single_cam(self, x_pos, y_pos, z_pos, speed):
 		# prepare
-		filp = -1 if self.position[3] * Planner.degToRad > np.pi  else 1
+		forward_pos = z_pos + config.arm_max_workspace
+
 		# config.arm_min_workspace
 		self._update()
 
-		x_diff = np.abs(self.position[5] - x_pos)
-		y_diff = np.abs(self.position[1] - y_pos)
-		z_diff = np.abs(self.position[6] - z_pos)
+		# check parameter
+		z_remain = 0 if forward_pos < config.arm_max_workspace else forward_pos - config.arm_max_workspace
+		z_remain_x = z_remain * np.cos(self.position[3])
+		z_remain_z = z_remain * np.sin(self.position[3])
+		z_pos = min(max(forward_pos, config.arm_min_workspace), config.arm_max_workspace)
 
-		line_length = np.sqrt(x_diff**2 + y_diff**2 + z_diff**2)
+		z_diff = forward_pos - self.position[4]
+
+		line_length = np.sqrt(x_pos**2 + y_pos**2 + z_diff**2)
 		overall_time = line_length / speed
 
-		x_velo = x_diff / overall_time
-		y_velo = y_diff / overall_time
+		x_velo = x_pos / overall_time
+		y_velo = y_pos / overall_time
 		z_velo = z_diff / overall_time
 
-		self.goal_pos[1] = y_pos
+		x_pos_x = x_pos * np.cos(self.position[3])
+		x_pos_z = x_pos * np.sin(self.position[3])
 
-		self.goal_vel[1] = y_velo * 1000
-		
+		self.move_stereo_cam(z_remain_x + x_pos_x, y_pos, z_remain_z + x_pos_z, speed, True)
+		self._send_position()
+	
+	def turn_single_cam(self, radian, speed):
+		self.turn_to_single_cam(self.position[3] + radian)
+
+	def turn_to_single_cam(self, radian, speed):
+		deg = radian * Planner.radToDeg
+
+		deg_diff = deg - self.position[3]
+
+		line_length = 2*np.pi*(config.arm_min_workspace + self.position[4]) * deg_diff / 360
+		overall_time = line_length / speed
+
+		self.goal_pos[3] = deg
+		self.goal_vel[3] = overall_time * 1000
+
 
 	def get_pos(self):
 		self._update()
 		return self.position[:3]
 
-	def get_pos_arm(self):
-		self._update()
-		return [self.position[0] + self.position[5], 
-				self.position[1], 
-				self.position[2] + self.position[6]]
+	# def get_pos_arm(self):
+	# 	self._update()
+	# 	return [self.position[0] + self.position[5], 
+	# 			self.position[1], 
+	# 			self.position[2] + self.position[6]]
 
 	def _update(self):
 		time_diff = (datetime.datetime.now() - self.delay_time).microseconds
@@ -166,11 +187,11 @@ class Planner:
 		self.position[0], self.velocity[0] = result[str(config.MIDDLE_MOTOR_ID)] # mm, (pulse / ms)
 		self.position[1], self.velocity[1] = result[str(config.LIFT_MOTOR_ID_L)] # mm, (pulse / ms)
 		self.position[2], self.velocity[2] = result[str(config.BASE_MOTOR_ID_L)] # mm, (pulse / ms)
-		self.position[3], self.velocity[3] = result[str(config.TURRET_MOTOR_ID)] # deg, (pulse / ms)
+		self.position[3], self.velocity[3] = result[str(config.TURRET_MOTOR_ID)] * Planner.degToRad # rad, (pulse / ms)
 		self.position[4], self.velocity[4] = result[str(config.FORWARD_MOTOR_ID)] # mm, (pulse / ms)
 		
-		self.position[5] = (config.arm_min_workspace + self.position[4]) * np.cos(self.position[3] * Planner.degToRad) # arm x
-		self.position[6] = (config.arm_min_workspace + self.position[4]) * np.sin(self.position[3] * Planner.degToRad) # arm z
+		self.position[5] = (config.arm_min_workspace + self.position[4]) * np.cos(self.position[3]) # arm x
+		self.position[6] = (config.arm_min_workspace + self.position[4]) * np.sin(self.position[3]) # arm z
 
 		self.delay_time = datetime.datetime.now()
 
