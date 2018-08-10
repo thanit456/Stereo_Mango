@@ -98,27 +98,47 @@ class Planner:
 		if is_set is False:
 			self._send_position()		
 
-	def move_to_single_cam(self, x_pos, y_pos, z_pos, speed):
+	def move_single_cam(self, x_pos, y_pos, z_pos, deg, speed):
+		# self._update()
+
 		# prepare
-		filp = -1 if self.position[3] * Planner.degToRad > np.pi  else 1
-		# config.arm_min_workspace
-		self._update()
+		z_remain = 0 if self.position[4] + z_pos < config.arm_max_workspace else (self.position[4] + z_pos) - config.arm_max_workspace
+		z_remain_x = z_remain * np.cos(self.position[3])
+		z_remain_z = z_remain * np.sin(self.position[3])
 
-		x_diff = np.abs(self.position[5] - x_pos)
-		y_diff = np.abs(self.position[1] - y_pos)
-		z_diff = np.abs(self.position[6] - z_pos)
+		x_pos_x = x_pos * np.cos(self.position[3] - np.pi / 2)
+		x_pos_z = x_pos * np.sin(self.position[3] - np.pi / 2)
 
-		line_length = np.sqrt(x_diff**2 + y_diff**2 + z_diff**2)
+		z_pos = min(max(self.position[4] + z_pos, config.arm_min_workspace), config.arm_max_workspace)
+		z_diff = np.abs(self.position[4] - z_pos)
+
+		line_length = np.sqrt(x_pos**2, y_pos**2, z_pos**2)
 		overall_time = line_length / speed
-
-		x_velo = x_diff / overall_time
-		y_velo = y_diff / overall_time
 		z_velo = z_diff / overall_time
 
-		self.goal_pos[1] = y_pos
+		self.move_stereo_cam(z_remain_x + x_pos_x, y_pos, z_remain_z + x_pos_z, speed, True)
+		self.turn_arm(deg, speed, True)
+		self.goal_pos[4] = self.position[4] + z_pos
+		self.goal_vel[4] = z_velo * 1000
 
-		self.goal_vel[1] = y_velo * 1000
-		
+		self._send_position()
+
+	def turn_arm(self, deg, speed, is_set = False):
+		self.turn_to_arm(self.position[3] * Planner.radToDeg + deg, speed)
+
+	def turn_to_arm(self, deg, speed, is_set = False):
+		rad = (deg  % 360) * Planner.degToRad
+		rad_diff = np.abs(self.position[3] - rad)
+		linear = rad_diff * self.position[4]
+		time = linear / speed
+
+		velo = rad_diff * Planner.radToDeg / time
+
+		self.goal_pos[3] = self.position[3] + rad
+		self.goal_vel[3] = velo * 1000
+
+		if is_set is False:
+			self._send_position()
 
 	def get_pos(self):
 		self._update()
