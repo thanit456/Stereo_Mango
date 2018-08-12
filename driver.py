@@ -18,234 +18,222 @@ def generate_otp():
 	h.update(timestamp.encode() + secret_key)
 	return h.digest()[:8].hex()+timestamp
 
-class DriverMotor:
-	"""docstring for DriverMotor"""
-	def __init__(self, host, id):
-		self.url_host = host
-		self.id = str(id)
-		self.ppmm = 0
+# class DriverMotor:
+# 	"""docstring for DriverMotor"""
+# 	def __init__(self, host, id):
+# 		self.url_host = host
+# 		self.id = str(id)
+# 		self.ppmm = 0
 
-		self.moving_threshold = 1
-		self.delay_time = 4 + 1.5 + 3.5 #ms
+# 		self.moving_threshold = 1
+# 		self.delay_time = 4 + 1.5 + 3.5 #ms
 
-		self.set_mode(1)
+# 		self.set_mode(1)
 
-		self.working_length = 1000 # mm
+# 		self.working_length = 1000 # mm
 
-	def set_pulse_per_mm(self, ppr):
-		self.ppmm = ppr
-		return True
+# 	def set_pulse_per_mm(self, ppr):
+# 		self.ppmm = ppr
+# 		return True
 
-	def set_max_movement(self, max_m):
-		self.max_length = max_m
+# 	def set_max_movement(self, max_m):
+# 		self.max_length = max_m
 
-		if self.ppmm == 0:
-			raise Exception('Set pulse per mm before call this function.')
+# 		if self.ppmm == 0:
+# 			raise Exception('Set pulse per mm before call this function.')
 
-		try:
-			return self._post('set', {"max_pos": self.max_length * self.ppmm})
-		except Exception as e:
-			raise e
+# 		try:
+# 			return self._post('set', {"max_pos": self.max_length * self.ppmm})
+# 		except Exception as e:
+# 			raise e
 
-	def set_min_movement(self, min_m):
-		self.min_length = min_m
+# 	def set_min_movement(self, min_m):
+# 		self.min_length = min_m
 
-		if self.ppmm == 0:
-			raise Exception('Set pulse per mm before call this function.')
+# 		if self.ppmm == 0:
+# 			raise Exception('Set pulse per mm before call this function.')
 
-		try:
-			return self._post('set', {"min_pos": self.min_length * self.ppmm})
-		except Exception as e:
-			raise e
+# 		try:
+# 			return self._post('set', {"min_pos": self.min_length * self.ppmm})
+# 		except Exception as e:
+# 			raise e
 	
-	def set_mode(self, mode = 1):
-		self.mode = mode
-		try:
-			return self._post('set', {"mode": self.mode})
-		except Exception as e:
-			raise e
+# 	def set_mode(self, mode = 1):
+# 		self.mode = mode
+# 		try:
+# 			return self._post('set', {"mode": self.mode})
+# 		except Exception as e:
+# 			raise e
 
-	def get_goal(self):
-		if self.ppmm == 0:
-			raise Exception('Set pulse per mm before call this function.')
+# 	def get_goal(self):
+# 		if self.ppmm == 0:
+# 			raise Exception('Set pulse per mm before call this function.')
 
 
-		if self.mode == 1:			
-			try:
-				result = self._post('get', ['goal_pos'])
-			except Exception as e:
-				raise e
-			return result['goal_pos'] / self.ppmm
-		else:
-			try:
-				result = self._post('get', ['goal_pwm'])
-			except Exception as e:
-				raise e
-			return result['goal_pwm']
+# 		if self.mode == 1:			
+# 			try:
+# 				result = self._post('get', ['goal_pos'])
+# 			except Exception as e:
+# 				raise e
+# 			return result['goal_pos'] / self.ppmm
+# 		else:
+# 			try:
+# 				result = self._post('get', ['goal_pwm'])
+# 			except Exception as e:
+# 				raise e
+# 			return result['goal_pwm']
 
-	def get_current(self):
-		if self.ppmm == 0:
-			raise Exception('Set pulse per mm before call this function.')
+# 	def get_current(self):
+# 		if self.ppmm == 0:
+# 			raise Exception('Set pulse per mm before call this function.')
 		
-		if self.mode == 1:
-			try:
-				result = self._post('get', ['cur_pos', 'cur_velo'])
-			except Exception as e:
-				raise e
-			return [result['cur_pos'] / self.ppmm, result['cur_velo']]
-		else:
-			try:
-				result = self._post('get', ['cur_pwm', 'cur_velo'])
-			except Exception as e:
-				raise e
-			return [result['cur_pwm'], result['cur_velo']]
+# 		if self.mode == 1:
+# 			try:
+# 				result = self._post('get', ['cur_pos', 'cur_velo'])
+# 			except Exception as e:
+# 				raise e
+# 			return [result['cur_pos'] / self.ppmm, result['cur_velo']]
+# 		else:
+# 			try:
+# 				result = self._post('get', ['cur_pwm', 'cur_velo'])
+# 			except Exception as e:
+# 				raise e
+# 			return [result['cur_pwm'], result['cur_velo']]
 
-	def get_gpio(self):
-		try:
-			result = self._post('get', ['gpio1', 'gpio2', 'gpio3', 'gpio4', 'gpio_limit_min', 'gpio_limit_max'])
-		except Exception as e:
-			raise e
+# 	def get_gpio(self):
+# 		try:
+# 			result = self._post('get', ['gpio1', 'gpio2', 'gpio3', 'gpio4', 'gpio_limit_min', 'gpio_limit_max'])
+# 		except Exception as e:
+# 			raise e
 
-		# min, max, 1, 2, 3, 4
-		return [result['gpio_limit_min'], result['gpio_limit_max'], result['gpio1'], result['gpio2'], result['gpio3'], result['gpio4']]
+# 		# min, max, 1, 2, 3, 4
+# 		return [result['gpio_limit_min'], result['gpio_limit_max'], result['gpio1'], result['gpio2'], result['gpio3'], result['gpio4']]
 
-	def get_hw_error(self):
-		try:
-			result = self._post('get', ['hwerr'])
-		except Exception as e:
-			raise e
+# 	def get_hw_error(self):
+# 		try:
+# 			result = self._post('get', ['hwerr'])
+# 		except Exception as e:
+# 			raise e
 
-		return result['hwerr']
+# 		return result['hwerr']
 
-	def get_adc(self, ch):
-		ch = 'adc{}'.format(ch)
-		try:
-			result = self._post('get', [ch])
-		except Exception as e:
-			raise e
+# 	def get_adc(self, ch):
+# 		ch = 'adc{}'.format(ch)
+# 		try:
+# 			result = self._post('get', [ch])
+# 		except Exception as e:
+# 			raise e
 
-		return result[ch]
+# 		return result[ch]
 
-	def set_goal_pwm(self, pwm):
-		try:
-			return self._post('set', {"goal_pwm": pwm})
-		except Exception as e:
-			raise e
+# 	def set_goal_pwm(self, pwm):
+# 		try:
+# 			return self._post('set', {"goal_pwm": pwm})
+# 		except Exception as e:
+# 			raise e
 
-	def enable(self, en = 1):
-		try:
-			return self._post('set', {'enable': 1})
-		except Exception as e:
-			raise e
+# 	def enable(self, en = 1):
+# 		try:
+# 			return self._post('set', {'enable': 1})
+# 		except Exception as e:
+# 			raise e
 
-	def set_goal_pos(self, pos, vel = 100):
-		try:
-			return self._post('set', {"goto_pos": pos * self.ppmm, "goto_velo": vel})
-		except Exception as e:
-			raise e
+# 	def set_goal_pos(self, pos, vel = 100):
+# 		try:
+# 			return self._post('set', {"goto_pos": pos * self.ppmm, "goto_velo": vel})
+# 		except Exception as e:
+# 			raise e
 
-	def set_moving_threshould(self, th):
-		self.moving_threshold = th
+# 	def set_moving_threshould(self, th):
+# 		self.moving_threshold = th
 
-	def scan_working_length(self, pwm):
-		# set mode to pwm
-		self.set_mode(0)
-		# move element to min position
-		self.set_goal_pwm(-1 * pwm)
-		# wait element hit min switch
-		gpio_min = self.get_gpio()[0]
-		time = datetime.datetime.now()
-		while not gpio_min:
-			if (datetime.datetime.now() - time).total_milliseconds > self.delay_time:
-				gpio_min = self.get_gpio()[0]
-				time = datetime.datetime.now()
-		# stop movement
-		self.set_goal_pwm(0)
-		# reset position on controller
-		self.reset_position()
-		# set min movement
-		self.set_min_movement(0)
-		# move element to max position
-		self.set_goal_pwm(pwm)
-		# wait element hit max switch
-		gpio_max = self.get_gpio()[1]
-		time = datetime.datetime.now()
-		while not gpio_max:
-			if (datetime.datetime.now() - time).total_milliseconds > self.delay_time:
-				gpio_max = self.get_gpio()[1]
-				time = datetime.datetime.now()
-		# stop movement
-		self.set_goal_pwm(0)
-		# change mode to position
-		self.set_mode(1)		
-		# get working length
-		self.working_length = self.get_current()
-		# set max movement		
-		self.set_max_movement(self.working_length)
+# 	def scan_working_length(self, pwm):
+# 		# set mode to pwm
+# 		self.set_mode(0)
+# 		# move element to min position
+# 		self.set_goal_pwm(-1 * pwm)
+# 		# wait element hit min switch
+# 		gpio_min = self.get_gpio()[0]
+# 		time = datetime.datetime.now()
+# 		while not gpio_min:
+# 			if (datetime.datetime.now() - time).total_milliseconds > self.delay_time:
+# 				gpio_min = self.get_gpio()[0]
+# 				time = datetime.datetime.now()
+# 		# stop movement
+# 		self.set_goal_pwm(0)
+# 		# reset position on controller
+# 		self.reset_position()
+# 		# set min movement
+# 		self.set_min_movement(0)
+# 		# move element to max position
+# 		self.set_goal_pwm(pwm)
+# 		# wait element hit max switch
+# 		gpio_max = self.get_gpio()[1]
+# 		time = datetime.datetime.now()
+# 		while not gpio_max:
+# 			if (datetime.datetime.now() - time).total_milliseconds > self.delay_time:
+# 				gpio_max = self.get_gpio()[1]
+# 				time = datetime.datetime.now()
+# 		# stop movement
+# 		self.set_goal_pwm(0)
+# 		# change mode to position
+# 		self.set_mode(1)		
+# 		# get working length
+# 		self.working_length = self.get_current()
+# 		# set max movement		
+# 		self.set_max_movement(self.working_length)
 
-		print ("Working length: {}".format(self.working_length))
+# 		print ("Working length: {}".format(self.working_length))
 
-	def wait_util_stop(self):
-		tmp_time = datetime.datetime.now()
+# 	def wait_util_stop(self):
+# 		tmp_time = datetime.datetime.now()
 
-		while 1:
-			if (datetime.datetime.now - tmp_time).milliseonds <= self.delay_time:
-				continue
+# 		while 1:
+# 			if (datetime.datetime.now - tmp_time).milliseonds <= self.delay_time:
+# 				continue
 
-			result = self.__post('get', ['cur_velo'])
+# 			result = self.__post('get', ['cur_velo'])
 
-			cur_velo = result['cur_velo']
-			if cur_velo < self.moving_threshold:
-				break
+# 			cur_velo = result['cur_velo']
+# 			if cur_velo < self.moving_threshold:
+# 				break
 
-			print ("Waiting motor {} ...".format(self.id))
+# 			print ("Waiting motor {} ...".format(self.id))
 
-	def reset_position(self):
-		try:
-			return self._post('cmd', ['pos_reset'])
-		except Exception as e:
-			raise e
+# 	def reset_position(self):
+# 		try:
+# 			return self._post('cmd', ['pos_reset'])
+# 		except Exception as e:
+# 			raise e
 
-	def _post(self, action, post):
-		url = "{}/{}".format(self.url_host, action)
+# 	def _post(self, action, post):
+# 		url = "{}/{}".format(self.url_host, action)
 		
-		data = {"token": generate_otp()}
-		data.update({self.id: post})
+# 		data = {"token": generate_otp()}
+# 		data.update({self.id: post})
 
-		result = requests.post(url, json=data)
-		if (result.status_code != 200):
-			raise Exception('HTTP Error: {}'.format(result.status_code))
-		# print (result.json())
-		if action == "get":
-			return result.json()[self.id]
+# 		result = requests.post(url, json=data)
+# 		if (result.status_code != 200):
+# 			raise Exception('HTTP Error: {}'.format(result.status_code))
+# 		# print (result.json())
+# 		if action == "get":
+# 			return result.json()[self.id]
 
-		return result.json()['success']
+# 		return result.json()['success']
 
-# class DriverServo(object):
+# class DriverServo:
 # 	"""docstring for DriverServo"""
 # 	def __init__(self, host, id):
-# 		super(DriverServo, self).__init__()
 # 		self.url_host = host
 # 		self.id = id
 # 		self.ppdeg = 0
 		
 # 	def set_pulse_per_deg(self, ppdeg):
 # 		self.ppdeg = ppdeg
-
-# class DriverLaser(object):
-# 	"""docstring for DriverLaser"""
-# 	def __init__(self, host, id):
-# 		super(DriverLaser, self).__init__()
-# 		self.url_host = host
-# 		self.id = id
-
-# 	def get_length(self):
-# 		pass
 		
-class DriverCamera(object):
+class DriverCamera:
 	"""docstring for DriverCamera"""
 	def __init__(self, id):
-		super(DriverCamera, self).__init__()
 		self.id = id
 		
 		self.vs = VideoStream(src=id)

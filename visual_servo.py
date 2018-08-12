@@ -4,15 +4,15 @@ import math
 import driver
 import datetime
 from motion_control import Planner
+from Tensorflow.object_detection import mod
 
 class VisualServo:
 	"""docstring for VisualServo"""
 	def __init__(self, driver_camera):
 		self.camera = driver_camera
-
 		frame = self.__get_frame()		
 
-		self.detector = None
+		self.detector = mod.setup()
 
 	def set_point_cloud(self, x, y, z):
 		self.target_x = x
@@ -42,36 +42,42 @@ class VisualServo:
 
 		planner = Planner.getInstance()
 
-		# cur_pos = planner.get_pos_arm()
+		cur_pos = planner.get_pos_arm()
 		prev_time = cur_time = datetime.datetime.now()
 
-		planner.move_arm_x(self.target_x)
-		planner.move_arm_y(self.target_y)
-		# planner.move_arm_z(self.target_z)
+		planner.move_single_cam(self.target_x - cur_pos[0], self.target_y - cur_pos[1], self.target_z - cur_pos[2], cur_pos[3], config.visual_speed)
 
 		while self.__is_running:
 			cur_time = datetime.datetime.now()
 
-			if (cur_time - prev_time).milliseconds >= config.visual_time_delay:
-				cur_pos = planner.get_pos()
-				depth = 0
+			if (cur_time - prev_time).milliseconds >= config.visual_time_delay:				
+				depth = planner.get_depth()
+
+				if depth <= 100:
+					planner.cut_mango(True, False)
+					time.sleep(5)
+					planner.cut_mango(False, False)
+					break
 				
 				# move servo
 				frame = self.__get_frame()
 				frame_height, frame_width = frame.shape[: 2]
 				frame_center = (frame_height/2, frame_width/2)
 
-				result = self.detector(frame)
+				result = mod.detect(frame, self.detector) # return was wrong type
 				mango_center = [result[0][1] + result[0][3] / 2, result[0][0] + result[0][2] / 2]
 
 				# diff_x = mango_center[0] - frame_center[0]
 				# diff_y = mango_center[1] - frame_center[1]
 
 				diff_x = get_dist_from_center(frame_center[0], mango_center[0], depth) # mm
-				diff_y = get_dist_from_center(frame_center[1], mango_center[1], depth) # mm
+				diff_y = get_dist_from_center(frame_center[1], mango_center[1], depth) * -1 # mm
 
-				planner.move_arm_x(cur_pos[0] + diff_x)
-				planner.move_arm_y(cur_pos[1] + diff_y)
+				diff_z = 0
+				if np.sqrt(diff_x**2 + diff_y**2) <= config.visual_radius_accept:
+					diff_z = 10
+
+				planner.move_single_cam(diff_x, diff_y, diff_z, cur_pos[3], config.visual_speed)
 
 				if np.sqrt(diff_x**2 + diff_y**2) <= config.visual_radius_accept:
 					planner.move_arm_z(cur_pos[2] + config.visual_forward_length)
