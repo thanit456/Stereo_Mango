@@ -41,12 +41,15 @@ url = "localhost:8080/api"
 camera_D0			= 128
 camera_focus_length1 = 50
 camera_focus_length2 = 50
-camera_focus_length3 = 50
+camera_focus_length3 = 50 # end-effector
 
 # section robot
 workspace_z			= 6000
 workspace_y			= 1800
 workspace_x			= 4000
+
+overlab_x = 0.9
+overlab_y = 0.9
 
 arm_dist_from_joint_turret = 1000
 arm_dist_from_joint_forward = 1000
@@ -61,3 +64,6 @@ visual_radius_accept = 50
 visual_forward_length = 100 # mm
 visual_speed = 10 # mm/s
 planner_update_time = 4 + 1.5 + 3.5 * (7 - 1) #ms
+
+deafult_speed = 200 # mm/s
+acceept_move = 100 # mm

@@ -2,17 +2,17 @@ import cv2
 import config
 import math
 import driver
-import datetime
+import datetime, time
 from motion_control import Planner
-from Tensorflow.object_detection import mod
+from mango_detection import mango_detector as md
 
 class VisualServo:
 	"""docstring for VisualServo"""
-	def __init__(self, driver_camera):
+	def __init__(self, driver_camera, model):
 		self.camera = driver_camera
-		frame = self.__get_frame()		
+		frame = self.__get_frame()
 
-		self.detector = mod.setup()
+		self.detection_model = model
 
 	def set_point_cloud(self, x, y, z):
 		self.target_x = x
@@ -31,7 +31,7 @@ class VisualServo:
 		return (origin[0] + (np.cos(deg) * x_diff - np.sin(deg) * z_diff),
 				origin[1],
 				origin[2] + (np.sin(deg) * x_diff + np.cos(deg) * z_diff))
-		
+
 
 	def loop(self):
 		def get_distance(prev, cur):
@@ -45,12 +45,12 @@ class VisualServo:
 		cur_pos = planner.get_pos_arm()
 		prev_time = cur_time = datetime.datetime.now()
 
-		planner.move_single_cam(self.target_x - cur_pos[0], self.target_y - cur_pos[1], self.target_z - cur_pos[2], cur_pos[3], config.visual_speed)
+		planner.move_single_cam(self.target_x - cur_pos[0], self.target_y - cur_pos[1], self.target_z - cur_pos[2], 0, config.visual_speed)
 
 		while self.__is_running:
 			cur_time = datetime.datetime.now()
 
-			if (cur_time - prev_time).milliseconds >= config.visual_time_delay:				
+			if (cur_time - prev_time).microseconds >= config.visual_time_delay:
 				depth = planner.get_depth()
 
 				if depth <= 100:
@@ -58,14 +58,18 @@ class VisualServo:
 					time.sleep(5)
 					planner.cut_mango(False, False)
 					break
-				
+
 				# move servo
 				frame = self.__get_frame()
 				frame_height, frame_width = frame.shape[: 2]
 				frame_center = (frame_height/2, frame_width/2)
 
-				result = mod.detect(frame, self.detector) # return was wrong type
-				mango_center = [result[0][1] + result[0][3] / 2, result[0][0] + result[0][2] / 2]
+				result = mod.detect(frame, self.detection_model)
+				if i < 0:
+					print ("Not Found mango")
+					prev_time = cur_time
+					continue
+				mango_center = result['center']
 
 				# diff_x = mango_center[0] - frame_center[0]
 				# diff_y = mango_center[1] - frame_center[1]

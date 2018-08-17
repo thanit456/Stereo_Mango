@@ -6,7 +6,7 @@ import datetime
 import pickle
 import numpy as np
 import cv2
-from imutils.video import VideoStream
+#from imutils.video import VideoStream
 import imutils
 
 secret_key = b'Eic981234'
@@ -227,16 +227,17 @@ def generate_otp():
 # 		self.url_host = host
 # 		self.id = id
 # 		self.ppdeg = 0
-		
+
 # 	def set_pulse_per_deg(self, ppdeg):
 # 		self.ppdeg = ppdeg
-		
+
 class DriverCamera:
 	"""docstring for DriverCamera"""
 	def __init__(self, id):
 		self.id = id
-		
-		self.vs = VideoStream(src=id)
+
+		#self.vs = VideoStream(src=id)
+		self.vs = cv2.VideoCapture(id)
 		self.camera = None
 
 		self.obj_points = []
@@ -251,7 +252,8 @@ class DriverCamera:
 		self.__load()
 
 	def start(self):
-		self.camera = self.vs.start()
+		#self.camera = self.vs.start()
+		self.camera = self.vs
 
 	def read(self):
 		if self.camera == None:
@@ -264,7 +266,7 @@ class DriverCamera:
 		return frame
 
 	def stop(self):
-		self.camera.stop()
+		#self.camera.stop()
 		self.camera = None
 
 	def calibrate(self, col = 6, row = 7, size = 25, count = 15, roi = 1):
@@ -306,7 +308,7 @@ class DriverCamera:
 				# Draw and display the corners
 				cv2.drawChessboardCorners(img, (row, col), corners, ret)
 				# print (corners)
-			
+
 				cv2.imshow('Images that use calibrate', img)
 				cv2.waitKey(500)
 				calibrate_count -= 1
@@ -336,7 +338,7 @@ class DriverCamera:
 				self.camera_distortion = pickle.load(input)
 				self.camera_new_mtx = pickle.load(input)
 		except Exception as e:
-			print (e)		
+			print (e)
 
 	def __save(self):
 		with open('camera_calibrate_{}.pkl'.format(self.id), 'wb') as output:

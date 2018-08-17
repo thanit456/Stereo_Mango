@@ -1,3 +1,3 @@
-[submodule "Tensorflow"]
-	path = Tensorflow
-	url = https://gitlab.com/cueic-mango-2018/Tensorflow.git
+[submodule "mango_detection"]
+	path = mango_detection
+	url = https://gitlab.com/cueic-mango-2018/mango_detection.git

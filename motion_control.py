@@ -1,7 +1,6 @@
 import driver
 import config
-import datetime
-import requests
+import time, hashlib, datetime, requests
 import numpy as np
 import threading
 
@@ -22,6 +21,15 @@ motor_template = {
 	'goto_pos' : 0,
 	'goto_velo': 0,
 }
+
+secret_key = b'Eic981234'
+
+def generate_otp():
+	timestamp = int(time.time()*1000)
+	timestamp = str(timestamp)
+	h = hashlib.sha256()
+	h.update(timestamp.encode() + secret_key)
+	return h.digest()[:8].hex()+timestamp
 
 class Planner:
 	__instance = None
@@ -67,8 +75,8 @@ class Planner:
 		self.motor[config.FORWARD_MOTOR_ID]['cpr'] = config.encoder_pulse_forward
 
 		self.servo = {
-			config.SERVO_DOOR_1	: dict(servo_template),
-			config.SERVO_DOOR_2 : dict(servo_template),
+			config.SERVO_DOOR1 : dict(servo_template),
+			config.SERVO_DOOR2 : dict(servo_template),
 			config.SERVO_CUTTER : dict(servo_template),
 		}
 
@@ -76,8 +84,8 @@ class Planner:
 
 		self.__is_running = True
 			
-	def __getattr__(self, name):
-		return getattr(self.instance, name)
+	#def __getattr__(self, name):
+	#	return getattr(self.instance, name)
 
 	def move_stereo_cam(self, x_pos, y_pos, z_pos, speed, is_set = False):
 		self._update()
@@ -100,9 +108,9 @@ class Planner:
 		line_length = np.sqrt(x_diff**2 + y_diff**2 + z_diff**2)
 		overall_time = line_length / speed # in seconds (mm / mm * s)
 
-		x_velo = x_diff / overall_time # mm / seconds
-		y_velo = y_diff / overall_time
-		z_velo = z_diff / overall_time
+		x_velo = 0 if overall_time == 0 else  x_diff / overall_time # mm / seconds
+		y_velo = 0 if overall_time == 0 else  y_diff / overall_time
+		z_velo = 0 if overall_time == 0 else  z_diff / overall_time
 
 		position = [self.position[0] + x_pos, self.position[1] + y_pos, self.position[2] + z_pos]
 		velocity = [x_velo, y_velo, z_velo]
@@ -131,9 +139,9 @@ class Planner:
 		z_pos = min(max(self.position[4] + z_pos, config.arm_min_workspace), config.arm_max_workspace)
 		z_diff = np.abs(self.position[4] - z_pos)
 
-		line_length = np.sqrt(x_pos**2, y_pos**2, z_pos**2)
+		line_length = np.sqrt(x_pos**2 + y_pos**2 + z_pos**2)
 		overall_time = line_length / speed
-		z_velo = z_diff / overall_time
+		z_velo = 0 if overall_time == 0 else z_diff / overall_time
 
 		self.move_stereo_cam(z_remain_x + x_pos_x, y_pos, z_remain_z + x_pos_z, speed, True)
 		self.turn_arm(deg, speed, True)
@@ -151,9 +159,9 @@ class Planner:
 		rad = (deg  % 360) * Planner.degToRad
 		rad_diff = np.abs(self.position[3] - rad)
 		linear = rad_diff * self.position[4]
-		time = linear / speed
+		overall_time = linear / speed
 
-		velo = rad_diff * Planner.radToDeg / time
+		velo = 0 if overall_time == 0 else rad_diff * Planner.radToDeg / overall_time
 
 		for motor_id in config.MOTOR_GROUP[3]:
 			self.motor[motor_id]['en'] = 1
@@ -216,8 +224,14 @@ class Planner:
 			servo.append('ch{}_pos'.format(servo_id))
 		servo.append('range')
 		data[str(config.END_EFFECTOR_ID)] = servo
-
-		tmp = requests.post(url, json=data).json()
+		
+		tmp = None
+		try:
+			tmp = requests.post(url, json=data).json()
+		except Exception as e:
+			print (e)
+			return 
+		
 		for motor_id in self.motor.keys():
 			self.motor[motor_id]['cur_pos'] = tmp[str(motor_id)]['cur_pos']		# pulse
 			self.motor[motor_id]['cur_velo'] = tmp[str(motor_id)]['cur_velo']	# pulse / ms
@@ -254,12 +268,18 @@ class Planner:
 		servo = {}
 		for servo_id in self.servo.keys():
 			servo.update({
-				'ch{}_enable'.format(servo_id) : self.servo_id[servo_id]['en'],
+				'ch{}_enable'.format(servo_id) : self.servo[servo_id]['en'],
 				'ch{}_pos'.format(servo_id) : self.servo[servo_id]['cur_pos'],
 			})
 		data[config.END_EFFECTOR_ID] = servo
-
-		result = requests.post(url, json=data).json()
+	
+		
+		result = None
+		try:
+			result = requests.post(url, json=data).json()
+		except Exception as e:
+			print (e)
+			return 
 		if (result.status_code != 200):
 			print ('HTTP Error: {}'.format(result.status_code))
 
