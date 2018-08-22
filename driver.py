@@ -65,7 +65,7 @@ def generate_otp():
 # 			return self._post('set', {"min_pos": self.min_length * self.ppmm})
 # 		except Exception as e:
 # 			raise e
-	
+
 # 	def set_mode(self, mode = 1):
 # 		self.mode = mode
 # 		try:
@@ -229,16 +229,6 @@ def generate_otp():
 
 # 		return result.json()['success']
 
-# class DriverServo:
-# 	"""docstring for DriverServo"""
-# 	def __init__(self, host, id):
-# 		self.url_host = host
-# 		self.id = id
-# 		self.ppdeg = 0
-
-# 	def set_pulse_per_deg(self, ppdeg):
-# 		self.ppdeg = ppdeg
-
 class DriverCamera:
 	"""docstring for DriverCamera"""
 	def __init__(self, id, queueSize = 3):
@@ -248,7 +238,6 @@ class DriverCamera:
 		self.Q = Queue(maxsize=max(queueSize, 2))
 		self.stopped = False
 
-		#self.vs = VideoStream(src=id)
 		self.vs = cv2.VideoCapture(id)
 
 		self.obj_points = []
