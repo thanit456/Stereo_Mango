@@ -6,8 +6,16 @@ import datetime
 import pickle
 import numpy as np
 import cv2
-#from imutils.video import VideoStream
 import imutils
+
+import sys
+from threading import Thread
+# import the Queue class from Python 3
+if sys.version_info >= (3, 0):
+	from queue import Queue
+# otherwise, import the Queue class for Python 2.7
+else:
+	from Queue import Queue
 
 secret_key = b'Eic981234'
 
@@ -233,12 +241,15 @@ def generate_otp():
 
 class DriverCamera:
 	"""docstring for DriverCamera"""
-	def __init__(self, id):
+	def __init__(self, id, queueSize = 3):
 		self.id = id
+		# initialize the queue used to store frames read from
+		# the video file
+		self.Q = Queue(maxsize=max(queueSize, 2))
+		self.stopped = False
 
 		#self.vs = VideoStream(src=id)
 		self.vs = cv2.VideoCapture(id)
-		self.camera = None
 
 		self.obj_points = []
 		self.img_points = []
@@ -252,22 +263,42 @@ class DriverCamera:
 		self.__load()
 
 	def start(self):
-		#self.camera = self.vs.start()
-		self.camera = self.vs
+		# start a thread to read frames from the file video stream
+		self.thread = Thread(target=self.update, args=())
+		self.thread.daemon = True
+		self.thread.start()
+
+	def update(self):
+		# keep looping infinitely
+		while True:
+			# if the thread indicator variable is set, stop the
+			# thread
+			if self.stopped:
+				return
+ 
+			# otherwise, ensure the queue has room in it
+			if not self.Q.full():
+				# read the next frame from the file
+				(grabbed, frame) = self.vs.read()
+				if self.img_points:
+					tmp = cv2.undistort(frame, self.camera_mtx, self.camera_distortion, None, self.camera_new_mtx)
+					frame = tmp
+ 
+				# add the frame to the queue
+				self.Q.put((grabbed, frame))
+			else:
+				self.read()
 
 	def read(self):
-		if self.camera == None:
-			raise Exception('The camera doesn\'t start yet')
-
-		frame = self.camera.read()
-		if self.img_points:
-			return cv2.undistort(frame, self.camera_mtx, self.camera_distortion, None, self.camera_new_mtx)
-
-		return frame
+		# return next frame in the queue
+		return self.Q.get()
 
 	def stop(self):
-		#self.camera.stop()
-		self.camera = None
+		self.stopped = True
+    
+	def more(self):
+		# return True if there are still frames in the queue
+		return self.Q.qsize() > 0
 
 	def calibrate(self, col = 6, row = 7, size = 25, count = 15, roi = 1):
 		self.start()
@@ -325,7 +356,7 @@ class DriverCamera:
 
 		self.__save()
 
-	def set_offset(self, x, y):
+	def set_offset(self, x, y, vertical_deg, horizontal_deg):
 		self.offset_x = x
 		self.offset_y = y
 

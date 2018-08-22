@@ -5,96 +5,89 @@ import driver
 import datetime, time
 from motion_control import Planner
 from mango_detection import mango_detector as md
+import numpy as np
 
 class VisualServo:
-	"""docstring for VisualServo"""
-	def __init__(self, driver_camera, model):
-		self.camera = driver_camera
-		frame = self.__get_frame()
+    """docstring for VisualServo"""
+    def __init__(self, show_image = False):
+        self.show_image = show_image
 
-		self.detection_model = model
+    def set_detector(self, session, model):
+        self.detector = {
+            'tf_session': session,
+            'model': model,
+        }
 
-	def set_point_cloud(self, x, y, z):
-		self.target_x = x
-		self.target_y = y
-		self.target_z = z
+    def set_camera(self, camera):
+        self.camera = camera
 
-	def __get_frame(self):
-		return self.camera.read()
+#     def rorate_about_point(self, origin, point, deg): # dict of x, y, z | deg in radian
+#         x_diff = origin[0] - point[0]
+#         z_diff = origin[2] - point[2]
+#         return (origin[0] + (np.cos(deg) * x_diff - np.sin(deg) * z_diff),
+#                 origin[1],
+#                 origin[2] + (np.sin(deg) * x_diff + np.cos(deg) * z_diff))
 
-	def __get_image_center(self):
-		return (self.image_width/2, self.image_height/2) # x, y
+    def loop(self):
+        planner = Planner.getInstance()
+                
+        error_count = 0
+        while self.__is_running and error_count < config.failed_count:
+#             depth = planner.get_depth()
+#             if depth <= config.cutting_lenght:
+#                 planner.cut_mango(True)
+#                 time.sleep(5)
+#                 planner.cut_mango(False)
+#                 break
 
-	def __rorate_about_point(self, origin, point, deg): # dict of x, y, z | deg in radian
-		x_diff = origin[0] - point[0]
-		z_diff = origin[2] - point[2]
-		return (origin[0] + (np.cos(deg) * x_diff - np.sin(deg) * z_diff),
-				origin[1],
-				origin[2] + (np.sin(deg) * x_diff + np.cos(deg) * z_diff))
+            # move servo
+            frame = self.camera.read()
+            if not frame[0]:
+                print ("Camera not ready.")
+                error_count += 1
+                planner.stop_move()
+                continue
 
+            frame_height, frame_width, ch = frame[1].shape
+            frame_center = (int(frame_width/2), int(frame_height/2))
 
-	def loop(self):
-		def get_distance(prev, cur):
-			return math.sqrt((cur[0]-prev[0])**2, (cur[1]-prev[1])**2, (cur[2]-prev[2])**2)
+            result = md.detect(frame[1], self.detector['model'][1:], self.detector['tf_session'], 0.6, self.show_image)
+            if self.show_image:
+                if 'center' in result.keys():
+                    cv2.line(result['image'], frame_center, result['center'], (255, 127, 0), 8)
+                cv2.imshow("Visual Servo", result['image'])
+                cv2.waitKey(1)
 
-		def get_dist_from_center(center, pixel, depth):
-			return (center - pixel) * depth / config.camera_focus_length1
+            if not 'boxes' in result.keys():
+                print ("Not Found mango")
+                error_count += 1
+                planner.stop_move()                
+                continue
 
-		planner = Planner.getInstance()
+            diff_x = result['center'][0] - frame_center[0] # pixel
+            diff_y = frame_center[1] - result['center'][1] # pixel
+            diff_z = (diff_x + diff_y) - np.sqrt(diff_x**2 + diff_y**2)
+            
+            diff_x = min(diff_x, config.visual_max_move)
+            diff_y = min(diff_y, config.visual_max_move)
+            diff_z = min(diff_z, config.visual_max_move)
 
-		cur_pos = planner.get_pos_arm()
-		prev_time = cur_time = datetime.datetime.now()
+            planner.move_single_cam(diff_x, diff_y, diff_z, config.visual_speed)
+            error_count = 0
 
-		planner.move_single_cam(self.target_x - cur_pos[0], self.target_y - cur_pos[1], self.target_z - cur_pos[2], 0, config.visual_speed)
+            #print ("boxes", result['boxes'], 'center', result['center'])
+            print ("move distance x:{}, y:{}, z:{}".format(diff_x, diff_y, diff_z))
+        
+        return True if error_count < config.failed_count else False
 
-		while self.__is_running:
-			cur_time = datetime.datetime.now()
+    def start(self):
+        self.__is_running = True
+        self.run()
 
-			if (cur_time - prev_time).microseconds >= config.visual_time_delay:
-				depth = planner.get_depth()
+    def run(self):
+        self.loop()
+        self.__is_running = False
 
-				if depth <= 100:
-					planner.cut_mango(True, False)
-					time.sleep(5)
-					planner.cut_mango(False, False)
-					break
-
-				# move servo
-				frame = self.__get_frame()
-				frame_height, frame_width = frame.shape[: 2]
-				frame_center = (frame_height/2, frame_width/2)
-
-				result = mod.detect(frame, self.detection_model)
-				if i < 0:
-					print ("Not Found mango")
-					prev_time = cur_time
-					continue
-				mango_center = result['center']
-
-				# diff_x = mango_center[0] - frame_center[0]
-				# diff_y = mango_center[1] - frame_center[1]
-
-				diff_x = get_dist_from_center(frame_center[0], mango_center[0], depth) # mm
-				diff_y = get_dist_from_center(frame_center[1], mango_center[1], depth) * -1 # mm
-
-				diff_z = 0
-				if np.sqrt(diff_x**2 + diff_y**2) <= config.visual_radius_accept:
-					diff_z = 10
-
-				planner.move_single_cam(diff_x, diff_y, diff_z, cur_pos[3], config.visual_speed)
-
-				if np.sqrt(diff_x**2 + diff_y**2) <= config.visual_radius_accept:
-					planner.move_arm_z(cur_pos[2] + config.visual_forward_length)
-
-				prev_time = cur_time
-
-	def start(self):
-		self.__is_running = True
-		self.run()
-
-	def run(self):
-		self.loop()
-		self.__is_running = False
-
-	def stop(self):
-		self.__is_running = False
+    def stop(self):
+        self.__is_running = False
+        cv2.destroyAllWindows()
