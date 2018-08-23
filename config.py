@@ -1,5 +1,3 @@
-import numpy as np
-
 # Section ID
 BASE_MOTOR_ID_L     = 'drive_a'
 BASE_MOTOR_ID_R     = 'drive_b'
@@ -47,28 +45,26 @@ basket = {
 # Section api
 url = "http://localhost:8080/api"
 
-# section camera
-camera_focus_length = 50 # end-effector
-
 # section robot
 workspace_z         = 6000
 workspace_y         = 1800
 workspace_x         = 1277
 workspace_arm_offset_x = 300
 
-overlab_x = 0.9
-overlab_y = 0.9
-
+# Section arm configure
+arm_start_position = 90
 arm_dist_from_joint_turret = 990
 arm_forward_max_length = 1550 - arm_dist_from_joint_turret
+
 arm_min_workspace = arm_dist_from_joint_turret
 arm_max_workspace = arm_min_workspace + arm_forward_max_length
 
 # section algorithm
 planner_update_time = 4 + 1.5 + 3.5 * (8 - 1) #ms
 
-visual_max_move = 100 # mm
+visual_max_move = 10 # mm
 visual_failed_count = 30
 
 default_speed = 50 # mm/s
 accept_move = 100 # mm
+moving_threshold = 19 # mm/ s

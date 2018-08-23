@@ -246,10 +246,7 @@ class DriverCamera:
 		self.camera_distortion = []
 		self.camera_new_mtx = []
 
-		self.offset_x = 0
-		self.offset_y = 0
-
-		self.__load()
+		self._load()
 
 	def start(self):
 		# start a thread to read frames from the file video stream
@@ -343,13 +340,13 @@ class DriverCamera:
 
 		print ("Calibration success.")
 
-		self.__save()
+		self._save()
 
 	def set_offset(self, x, y, vertical_deg, horizontal_deg):
 		self.offset_x = x
 		self.offset_y = y
 
-	def __load(self):
+	def _load(self):
 		try:
 			with open('camera_calibrate_{}.pkl'.format(self.id), 'rb') as input:
 				self.obj_points = pickle.load(input)
@@ -360,7 +357,7 @@ class DriverCamera:
 		except Exception as e:
 			print (e)
 
-	def __save(self):
+	def _save(self):
 		with open('camera_calibrate_{}.pkl'.format(self.id), 'wb') as output:
 			pickle.dump(self.obj_points, output, pickle.HIGHEST_PROTOCOL)
 			pickle.dump(self.img_points, output, pickle.HIGHEST_PROTOCOL)

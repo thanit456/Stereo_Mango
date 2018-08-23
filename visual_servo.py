@@ -32,7 +32,8 @@ class VisualServo:
         planner = Planner.getInstance()
                 
         error_count = 0
-        while self.__is_running and error_count < config.failed_count:
+        z_length_sum = 0
+        while self.__is_running and error_count < config.visual_failed_count:
 #             depth = planner.get_depth()
 #             if depth <= config.cutting_lenght:
 #                 planner.cut_mango(True)
@@ -67,18 +68,20 @@ class VisualServo:
             diff_x = result['center'][0] - frame_center[0] # pixel
             diff_y = frame_center[1] - result['center'][1] # pixel
             diff_z = (diff_x + diff_y) - np.sqrt(diff_x**2 + diff_y**2)
-            
-            diff_x = min(diff_x, config.visual_max_move)
-            diff_y = min(diff_y, config.visual_max_move)
-            diff_z = min(diff_z, config.visual_max_move)
 
-            planner.move_single_cam(diff_x, diff_y, diff_z, config.visual_speed)
+            z_length_sum += diff_z
+            
+            diff_x = min(diff_x, config.visual_max_move) * (diff_z / z_length_sum)
+            diff_y = min(diff_y, config.visual_max_move) * (diff_z / z_length_sum)
+            diff_z = min(diff_z, config.visual_max_move) * (diff_z / z_length_sum)
+
+            planner.move_single_cam(diff_x, diff_y, diff_z, 0, config.visual_speed)
             error_count = 0
 
             #print ("boxes", result['boxes'], 'center', result['center'])
             print ("move distance x:{}, y:{}, z:{}".format(diff_x, diff_y, diff_z))
         
-        return True if error_count < config.failed_count else False
+        return True if error_count < config.visual_failed_count else False
 
     def start(self):
         self.__is_running = True
