@@ -11,6 +11,7 @@ class VisualServo:
     """docstring for VisualServo"""
     def __init__(self, show_image = False):
         self.show_image = show_image
+        self.color = -1
 
     def set_detector(self, session, model):
         self.detector = {
@@ -28,18 +29,19 @@ class VisualServo:
 #                 origin[1],
 #                 origin[2] + (np.sin(deg) * x_diff + np.cos(deg) * z_diff))
 
+    def get_color(self):
+        return self.color
+
     def loop(self):
         planner = Planner.getInstance()
-                
+        time.sleep(1)
         error_count = 0
         z_length_sum = 0
+        time_now = datetime.datetime.now()
         while self.__is_running and error_count < config.visual_failed_count:
-#             depth = planner.get_depth()
-#             if depth <= config.cutting_lenght:
-#                 planner.cut_mango(True)
-#                 time.sleep(5)
-#                 planner.cut_mango(False)
-#                 break
+            depth = planner.get_depth()
+            if depth <= config.cut_length:
+                break
 
             # move servo
             frame = self.camera.read()
@@ -50,9 +52,9 @@ class VisualServo:
                 continue
 
             frame_height, frame_width, ch = frame[1].shape
-            frame_center = (int(frame_width/2), int(frame_height/2))
+            frame_center = (int(frame_width/2), int(frame_height/2) + config.camera_K_offset_x)
 
-            result = md.detect(frame[1], self.detector['model'][1:], self.detector['tf_session'], 0.6, self.show_image)
+            result = md.detect(frame[1], self.detector['model'][1:], self.detector['tf_session'], 0.85, self.show_image)
             if self.show_image:
                 if 'center' in result.keys():
                     cv2.line(result['image'], frame_center, result['center'], (255, 127, 0), 8)
@@ -65,21 +67,28 @@ class VisualServo:
                 planner.stop_move()                
                 continue
 
-            diff_x = result['center'][0] - frame_center[0] # pixel
+            diff_x = (result['center'][0] - frame_center[0]) # pixel
             diff_y = frame_center[1] - result['center'][1] # pixel
-            diff_z = (diff_x + diff_y) - np.sqrt(diff_x**2 + diff_y**2)
+            diff_z = np.sqrt(diff_x**2 + diff_y**2) / 2
 
             z_length_sum += diff_z
+            zm = 1000
+            zf = zm  + z_length_sum
             
-            diff_x = min(diff_x, config.visual_max_move) * (diff_z / z_length_sum)
-            diff_y = min(diff_y, config.visual_max_move) * (diff_z / z_length_sum)
-            diff_z = min(diff_z, config.visual_max_move) * (diff_z / z_length_sum)
-
-            planner.move_single_cam(diff_x, diff_y, diff_z, 0, config.visual_speed)
+            diff_x = min(diff_x, config.visual_max_move) * (zf / (zm + z_length_sum)) * 2.5
+            diff_y = min(diff_y, config.visual_max_move) * (zf / (zm + z_length_sum))
+            diff_z = min(diff_z, config.visual_max_move) * (zf / (zm + z_length_sum))
+#             diff_y=0
+            planner.move_single_cam(diff_x, diff_y, diff_z, 0, config.default_speed)
             error_count = 0
+            self.color = result['class']
+            
+            now = datetime.datetime.now()
+            time.sleep(((now - time_now).microseconds / 1000000) + 0.2)
+            time_now = now
 
             #print ("boxes", result['boxes'], 'center', result['center'])
-            print ("move distance x:{}, y:{}, z:{}".format(diff_x, diff_y, diff_z))
+            print ("move distance x:{}, y:{}, z:{}, d:{}".format(diff_x, diff_y, diff_z, depth))
         
         return True if error_count < config.visual_failed_count else False
 
@@ -92,5 +101,6 @@ class VisualServo:
         self.__is_running = False
 
     def stop(self):
+        if self.__is_running:
+            cv2.destroyAllWindows()
         self.__is_running = False
-        cv2.destroyAllWindows()
