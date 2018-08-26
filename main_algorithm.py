@@ -11,22 +11,17 @@ import math
 import time
 
 camera = {
-    'device' : driver.DriverCamera(config.CAMERA_END_EFFECTOR),
+    'device' : driver.DriverCamera(config.CAMERA_END_EFFECTOR, 2),
     'focus_length' : config.camera_focus_length,
     'offset' : [0, 0, 0], # x, y, z
 }
 
 base_position = [
-    (500, 90),
-    (1500, 270),
-    (2500, 90),
-    (3500, 270),
-    (4500, 90),
-    (5500, 270),
+    (3239.7674, 0, 90),
 ]
 
 planner = Planner.getInstance()
-mango_model = mod.load_model('mango_detection/model/', 'mango_1.1.pb')
+mango_model = mod.load_model('mango_detection/model/', 'mango_2.0.pb')
 
 def get_distance(pos1, pos2):
     def diff(a1, a2):
@@ -75,13 +70,10 @@ def turn_arm_drop_mango(color = 1):
     if color not in [1, 2]:
         color = 1
     
-#     deg_go = config.basket[color] - planner.get_arm_deg()
-#     forward = planner.get_arm_length()
-#     planner.move_single_cam(0, 0, -1 * forward, deg_go, config.default_speed)
-    
-#     return True if planner.is_moving() and (deg_go * forward <= config.accept_move) else False
-    
+    cur_pos = planner.get_pos()
+    planner.move_to_stereo_cam(config.workspace_x/2, cur_pos[1], cur_pos[2], config.default_speed)
     if color == 1:
+        
         planner.force(config.FORWARD_MOTOR_ID, 0, 500, 10000)
         print('A2')
         planner.force(config.TURRET_MOTOR_ID, 0, 500, 100)
@@ -100,8 +92,9 @@ def turn_arm_drop_mango(color = 1):
 
 def drop_mango():
     print('DROP')
-    planner.cut_mango(False)
     planner.drop_mango(True)
+    time.sleep(1.5)
+    planner.cut_mango(False)
     time.sleep(1.5)
     planner.drop_mango(False)
     time.sleep(1.5)
@@ -134,14 +127,18 @@ if __name__ == '__main__':
     with detection_graph.as_default():
         with tf.Session() as sess:
             camera['device'].start()
-#             for index, item in enumerate(base_position):
-#                 while not state_a1():
-#                     time.sleep(0.1)
-            if 1:
+            for index, item in enumerate(base_position):
+                planner.force(config.LIFT_MOTOR_ID_L, item[1] * config.encoder_pulse_lift_l, 2)
+                planner.force(config.LIFT_MOTOR_ID_R, item[1] * config.encoder_pulse_lift_l, 2, 300)
+                planner.force(config.BASE_MOTOR_ID_L, item[0] * config.encoder_pulse_base_l, 4)
+                planner.force(config.BASE_MOTOR_ID_R, item[0] * config.encoder_pulse_base_l, 4, 400)
+                    
                 for i in range(2, count_i - 2):
                     for j in range(2, count_j - 1):
                         print('Coord',i,j)
                         state = 0
+                        planner.force(config.BASE_MOTOR_ID_L, item[0] * config.encoder_pulse_base_l, 4)
+                        planner.force(config.BASE_MOTOR_ID_R, item[0] * config.encoder_pulse_base_l, 4, 400)
                         planner.force(config.FORWARD_MOTOR_ID, 0, 500, 10000)
                         planner.force(config.TURRET_MOTOR_ID, 2000, 500, 100)
                         while True:
@@ -176,7 +173,9 @@ if __name__ == '__main__':
                                     vs.set_detector(sess, mango_model)
                                     vs.set_camera(camera['device'])
                                     try:
-                                        vs.start()
+                                        res = vs.start()
+                                        if not res:
+                                            break
                                     finally:
                                         vs.stop()
                                     

@@ -18,15 +18,15 @@ MOTOR_GROUP = [
 ]
 
 # Section encoder
-encoder_pulse_base_l    = (2000 * 4) / (2 * np.pi * 750)
-encoder_pulse_base_r    = (2000 * 4) / (2 * np.pi * 750)
+encoder_pulse_base_l    = (2000 * 4) / (2 * np.pi * 75)
+encoder_pulse_base_r    = (2000 * 4) / (2 * np.pi * 75)
 encoder_pulse_lift_l    = (2000 * 4) / (8 * 20)
 encoder_pulse_lift_r    = (2000 * 4) / (8 * 20)
 encoder_pulse_middle    = (160 * 1024 * 4) / (8 * 20)
 encoder_pulse_turret    = (2000 * 4) / 360
 encoder_pulse_forward   = (160 * 1024 * 4) / (5 * 24)
 
-CAMERA_END_EFFECTOR = 'http://127.0.0.1:8082/stream.mjpg?w=1280&h=720&fps=15'
+CAMERA_END_EFFECTOR = 'http://127.0.0.1:8082/stream.mjpg?w=1280&h=720'
 camera_focus_length = 250
 
 SERVO_DOOR              = 0x03
@@ -34,8 +34,8 @@ SERVO_CUTTER            = 0x01
 END_EFFECTOR_ID         = 'endeff'
 
 # Section servo position
-servo_door_close        = 2000
-servo_door_open         = 1300
+servo_door_close        = 1880
+servo_door_open         = 1150
 servo_cutter_cut        = 1000
 servo_cutter_open       = 1800
 
@@ -61,7 +61,7 @@ workspace_arm_offset_x = 195.3125 # tune
 # Section arm configure
 arm_start_position = 0 # tune
 arm_dist_from_joint_turret = 840 # tune
-arm_forward_max_length = 555.17578125 # tune
+arm_forward_max_length = 543.640136719 # 555.17578125 # tune
 
 arm_min_workspace = arm_dist_from_joint_turret
 arm_max_workspace = arm_min_workspace + arm_forward_max_length
@@ -73,16 +73,20 @@ planner_update_time = 4 + 1.5 + 3.5 * (8 - 1) #ms
 visual_max_move = 10 # mm  # tune
 visual_failed_count = 10  # tune
 
+# object tracking
+object_tracker = 'kcf' # csrt, boosting, mil, tld, mediainflow, mosse
+object_track_count = 10
+
 camera_K_offset_x = 30 # pixel
 
 # section state move turret for find max score
 deg_find_score = 0.5# deg  # tunev
 
 # section operate basket
-cut_count = 1
+cut_count = 2
 cut_length = 120
 
 # section general
 default_speed = 50 # mm/s  # tune
 accept_move = 100 # mm  # tune
-moving_threshold = 2 # mm/ s  # tune
+moving_threshold = 20 # mm/ s  # tune
