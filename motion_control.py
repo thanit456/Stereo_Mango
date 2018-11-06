@@ -6,24 +6,13 @@ from threading import Thread, Lock
 import pprint
 import math
 
+import sync_group
+
 servo_template =  {
     "en": 1,
     'min_pos': 1000,
     'max_pos': 2000,
     'cur_pos': 1500,
-}
-
-motor_template = {
-    'en' : 0,
-    'cpr' : 8000,
-    'cur_pos' : 1,
-    'cur_velo': 1,
-    'min_pos' : 0,
-    'max_pos' : 0,
-    'goal_pos' : 0,
-    'goal_velo' : 0,
-    'goto_pos' : 0,
-    'goto_velo': 0,
 }
 
 secret_key = b'Eic981234'
@@ -34,6 +23,17 @@ def generate_otp():
     h = hashlib.sha256()
     h.update(timestamp.encode() + secret_key)
     return h.digest()[:8].hex()+timestamp
+
+def get_how_to_turn(source_pos, sink_pos, radius): # pos np.array([x, z])
+    dif_pos = sink_pos - source_pos
+    length = np.linalg.norm(dif_pos)
+    rad = np.arctan(dif_pos[1] / dif_pos[0])
+    
+    radius = radius if length > radius else length
+    x = sink_pos[0] - radius * np.cos(rad)
+    z = sink_pos[1] - radius * np.sin(rad)
+
+    return [rad * 180 / np.pi, x, z]
 
 class Planner:
     __instance = None
@@ -62,22 +62,17 @@ class Planner:
         self.velocity = [0 for i in range(7)] # middle, lift, base, turret, forward
         self.depth = 0
 
-        self.motor = {
-            config.BASE_MOTOR_ID_L : dict(motor_template),
-            config.BASE_MOTOR_ID_R : dict(motor_template),
-            config.LIFT_MOTOR_ID_L : dict(motor_template),
-            config.LIFT_MOTOR_ID_R : dict(motor_template),
-            config.MIDDLE_MOTOR_ID : dict(motor_template),
-            config.TURRET_MOTOR_ID : dict(motor_template),
-            config.FORWARD_MOTOR_ID : dict(motor_template),
-        }
-        self.motor[config.BASE_MOTOR_ID_L]['cpr'] = config.encoder_pulse_base_l
-        self.motor[config.BASE_MOTOR_ID_R]['cpr'] = config.encoder_pulse_base_r
-        self.motor[config.LIFT_MOTOR_ID_L]['cpr'] = config.encoder_pulse_lift_l
-        self.motor[config.LIFT_MOTOR_ID_R]['cpr'] = config.encoder_pulse_lift_r
-        self.motor[config.MIDDLE_MOTOR_ID]['cpr'] = config.encoder_pulse_middle
-        self.motor[config.TURRET_MOTOR_ID]['cpr'] = config.encoder_pulse_turret
-        self.motor[config.FORWARD_MOTOR_ID]['cpr'] = config.encoder_pulse_forward
+        self.motor = {}
+        self.motor[config.BASE_MOTOR_ID_L] = driver.DriverMotor(config.BASE_MOTOR_ID_L, ppmm=config.encoder_pulse_base_l)
+        self.motor[config.BASE_MOTOR_ID_R] = driver.DriverMotor(config.BASE_MOTOR_ID_R, ppmm=config.encoder_pulse_base_r)
+        self.motor[config.LIFT_MOTOR_ID_L] = driver.DriverMotor(config.LIFT_MOTOR_ID_L, ppmm=config.encoder_pulse_lift_l)
+        self.motor[config.LIFT_MOTOR_ID_R] = driver.DriverMotor(config.LIFT_MOTOR_ID_R, ppmm=config.encoder_pulse_lift_r)
+        self.motor[config.MIDDLE_MOTOR_ID] = driver.DriverMotor(config.MIDDLE_MOTOR_ID, ppmm=config.encoder_pulse_middle)
+        self.motor[config.TURRET_MOTOR_ID] = driver.DriverMotor(config.TURRET_MOTOR_ID, ppmm=config.encoder_pulse_turret)
+        self.motor[config.FORWARD_MOTOR_ID] = driver.DriverMotor(config.FORWARD_MOTOR_ID, ppmm=config.encoder_pulse_forward)
+        self.motor_group1 = sync_group.Group('overall')
+        for motor_id in self.motor.keys(): self.motor_group1.add_driver(self.motor[motor_id])
+        for motor_id in self.motor.keys(): self.motor[motor_id].set_moving_threshould(config._moving_threshold[motor_id])
 
         self.servo = {
             config.SERVO_DOOR : dict(servo_template),
@@ -93,146 +88,56 @@ class Planner:
         
         self.start()
 
-    def _check_arm(self, x_pos, f_pos, deg): # position where arm will move to there
-        rad = (deg % 360) * Planner.degToRad
-        
-        # check arm length that can move end effector to there
-        workspace_min_x = 0 - config.workspace_arm_offset_x
-        workspace_max_x = config.workspace_x + config.workspace_arm_offset_x
-
-        # shrink forward position
-        arm_pos =  x_pos + f_pos * np.cos(rad)
-        arm_left = 0
-        if arm_pos < workspace_min_x:
-            arm_left = workspace_min_x - arm_pos
-            arm_pos = workspace_min_x
-        elif arm_pos > workspace_max_x:
-            arm_left = workspace_max_x - arm_pos
-            arm_pos = workspace_max_x
-        #print (arm_left, arm_pos, workspace_min_x, workspace_max_x)
-        
-        # move x position
-        if arm_left != 0:
-            z_length  =  (arm_pos - x_pos) / np.cos(rad)
-        else:
-            z_length = f_pos
-        
-        #print('ZL',arm_pos , self.position[0] , np.cos(rad))
-        #print (self.position[4], z_length)
-        z_left = 0
-        if z_length < config.arm_min_workspace:
-            z_left = z_length - config.arm_min_workspace
-            z_length = config.arm_min_workspace
-        elif z_length > config.arm_max_workspace:
-            z_left = z_length - config.arm_max_workspace
-            z_length = config.arm_max_workspace
-        #print (z_left, z_length, config.arm_min_workspace, config.arm_max_workspace)
-
-        z_left_x = z_left * np.cos(rad)
-        z_left_z = z_left * np.sin(rad)
-        return (z_left_x, z_left_z, z_length) # x, z, forward pos
-        
-    def move_stereo_cam(self, x_pos, y_pos, z_pos, speed):
-        self.move_to_stereo_cam(self.position[0] + x_pos, self.position[1] + y_pos, self.position[2] + z_pos, speed)
-
-    def move_to_stereo_cam(self, x_pos, y_pos, z_pos, speed): # pos in mm, velo in mm/s
+    def move_to(self, x_pos, y_pos, z_pos, speed): # pos in mm, velo in mm/s
         # check input
         x_pos = min(max(x_pos, 0), config.workspace_x)
         y_pos = min(max(y_pos, 0), config.workspace_y)
         z_pos = min(max(z_pos, 0), config.workspace_z)
+
+        new_pos = np.array([x_pos, z_pos])
+        cur_pos = np.array(self.position[5:7])
+        cur1_pos = np.array([self.position[0], self.position[2]])
         
+        dif_pos = new_pos - cur_pos
+        move_length = np.linalg.norm(dif_pos)
 
-        x_diff = np.abs(x_pos - self.position[0])
-        y_diff = np.abs(y_pos - self.position[1])
-        z_diff = np.abs(z_pos - self.position[2])
+        pos = list(self.position[0:5])
+        pos[1] = y_pos
+        velo = list(config.default_spd)
+
+        if config.arm_min_workspace < self.position[4] + move_length < config.arm_max_workspace:
+            pos[4] += move_length            
+        else:
+            pos[4] = config.arm_min_workspace + (config.arm_forward_max_length * 0.0)
+
+        rad, x, z = get_how_to_turn(cur1_pos, new_pos, pos[4])
+        pos[0] = x
+        pos[2] = z
+        pos[3] = rad
+
+        self.set_all_position(pos, velo)
+
+    # def cut_mango(self, is_cut):
+    #     cutter = self.servo[config.SERVO_CUTTER]
         
-        overall_time = np.sqrt(x_diff**2 + y_diff**2 + z_diff**2) / (speed * 1000) # in seconds (mm / mm * ms)
-        x_velo = x_diff / overall_time # mm / s
-        y_velo = y_diff / overall_time
-        z_velo = z_diff / overall_time
-        #print (x_velo, y_velo, z_velo)
+    #     cutter['en'] = 1
+    #     cutter['cur_pos'] = cutter['min_pos'] if is_cut is True else cutter['max_pos']
 
-        position = [x_pos, y_pos, z_pos]
-        velocity = [x_velo, y_velo, z_velo]
+    # def drop_mango(self, is_drop):
+    #     door = self.servo[config.SERVO_DOOR]
 
-        # set output
-        for i in range(0, 2):
-            for motor_id in config.MOTOR_GROUP[i]:
-                self.motor[motor_id]['en'] = 1
-                self.motor[motor_id]['goal_pos'] = int(position[i] * self.motor[motor_id]['cpr'])
-                self.motor[motor_id]['goal_velo'] = math.ceil(velocity[i] * self.motor[motor_id]['cpr']) # pulse / ms
-#                print(i, position[i], motor_id, self.motor[motor_id]['goal_pos'])
-
-    def force(self, motor_id, position, velo, wait=False):
-        self.motor[motor_id]['en'] = 1
-        self.motor[motor_id]['goal_pos'] = position
-        self.motor[motor_id]['goal_velo'] = velo
-        if wait:
-            while abs(self.motor[motor_id]['cur_pos'] - position) >= wait:
-                time.sleep(0.5)
-
-    def move_single_cam(self, x_pos, y_pos, z_pos, deg, speed):
-        x_pos1 = x_pos * np.cos(((self.position[3] + deg) * Planner.degToRad) - (np.pi / 2))
-        res = self._check_arm(x_pos1, self.position[4] + z_pos, self.position[3] + deg)
-        
-        #print (self.position[4] + z_pos - config.arm_min_workspace)
-        f_pos = res[2] - config.arm_min_workspace
-        x_pos1 = res[0]
-        x_pos1 += x_pos * np.cos(((self.position[3] + deg) * Planner.degToRad) - (np.pi / 2))
-        z_pos1 = res[1]
-        z_pos1 += x_pos * np.sin(((self.position[3] + deg) * Planner.degToRad) - (np.pi / 2))
-        
-        x_diff = np.abs(x_pos1)
-        y_diff = np.abs(y_pos)
-        z_diff = np.abs(z_pos1)
-        f_diff = np.abs((self.position[4] - config.arm_min_workspace) - f_pos)
-        deg_diff = np.abs(deg)    
-        #print (x_pos1, y_pos, z_pos1, f_pos, deg)
-        
-        overall_time = np.sqrt(x_diff**2 + y_diff**2 + z_diff**2) / (speed * 1000)
-        f_velo = f_pos / overall_time
-        deg_velo = deg_diff / overall_time # deg / s
-
-        self.move_stereo_cam(x_pos1, y_pos, z_pos1, speed)
-        for motor_id in config.MOTOR_GROUP[4]:
-            self.motor[motor_id]['en'] = 1
-            self.motor[motor_id]['goal_pos'] = int(f_pos * self.motor[motor_id]['cpr'])
-            self.motor[motor_id]['goal_velo'] = math.ceil(f_velo * self.motor[motor_id]['cpr'])
-            #print(motor_id, self.motor[motor_id]['goal_pos'])
-        
-        #print(self.position[3], deg)
-        for motor_id in config.MOTOR_GROUP[3]:
-            self.motor[motor_id]['en'] = 1
-            self.motor[motor_id]['goal_pos'] = int(((self.position[3] + deg) % 360) * self.motor[motor_id]['cpr'])
-            self.motor[motor_id]['goal_velo'] = math.ceil(deg_velo * self.motor[motor_id]['cpr']) # pulse / ms
-            #print(motor_id, self.motor[motor_id]['goal_pos'], self.position[3], deg)
-
-    def cut_mango(self, is_cut):
-        cutter = self.servo[config.SERVO_CUTTER]
-        
-        cutter['en'] = 1
-        cutter['cur_pos'] = cutter['min_pos'] if is_cut is True else cutter['max_pos']
-
-    def drop_mango(self, is_drop):
-        door = self.servo[config.SERVO_DOOR]
-
-        door['en'] = 1
-        door['cur_pos'] = door['min_pos'] if is_drop is True else door['max_pos']
+    #     door['en'] = 1
+    #     door['cur_pos'] = door['min_pos'] if is_drop is True else door['max_pos']
     
     def stop_move(self):
         for i, item in enumerate(self.MOTOR_GROUP):
             for mtd in item:
-                self.motor[mtd]['goal_pos'] = self.motor[item[0]]['cur_pos']
-                self.motor[mtd]['goal_velo'] = 0
+                self.motor[mtd].set_goal(self.motor[item[0]].get_curr()[0], 0)
 
-    def is_moving(self, mid = -1): # 
-        if mid >= 0:
-            if self.velocity[mid] > config.moving_threshold: # mm / s
-                    return True
-        else:
-            for velo in self.velocity:
-                if velo > config.moving_threshold: # mm / s
-                    return True
+    def is_moving(self): # 
+        for id in self.motor:
+            if self.motor[id].is_moving():
+                return True
         return False
 
     def get_pos(self):
@@ -240,15 +145,29 @@ class Planner:
 
     def get_pos_arm(self):
         return (self.position[5], self.position[1], self.position[6])
+    
+    # def get_depth(self):
+    #     return self.depth
 
-    def get_arm_length(self):
-        return self.position[4]
-    
-    def get_arm_deg(self):
-        return self.position[3]
-    
-    def get_depth(self):
-        return self.depth
+    def set_all_position(self, pos, velo): # x, y, z, deg, arm
+        for i in range(len(config.MOTOR_GROUP)):
+            for id in config.MOTOR_GROUP[i]:
+                self.motor[id].enable(1)
+                self.motor[id].set_goal(pos[i], velo[i])
+
+    def set_position(self, motor_id, pulse, velo, error_wait = 0):
+        self.motor[motor_id].enable(1)
+        self.motor[motor_id].set_goal(pulse, velo, False)
+        if wait:
+            while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
+                time.sleep(0.5)
+
+    def set_pulse(self, motor_id, pulse, velo, error_wait = 0):
+        self.motor[motor_id].enable(1)
+        self.motor[motor_id].set_goal(pulse, velo, True)
+        if wait:
+            while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
+                time.sleep(0.5)
 
     def _update(self):
         result = {}
@@ -256,15 +175,13 @@ class Planner:
         url = "{}/get".format(config.url)
         data = {"token": generate_otp()}
 
-        for motor_id in self.motor.keys():
-            data[str(motor_id)] = ["cur_pos", "cur_velo"]
-
-        servo = []
-        for servo_id in self.servo.keys():
-            servo.append('ch{}_pos'.format(servo_id))
-        servo.append('range')
-        data[str(config.END_EFFECTOR_ID)] = servo
+        # servo = []
+        # for servo_id in self.servo.keys():
+        #     servo.append('ch{}_pos'.format(servo_id))
+        # servo.append('range')
+        # data[str(config.END_EFFECTOR_ID)] = servo
         
+        self.motor_group1.get()
         tmp = None
         try:
             tmp = requests.post(url, json=data).json()
@@ -272,19 +189,15 @@ class Planner:
             print ("Motor Control", e)
             return 
         
-        for motor_id in self.motor.keys():
-            self.motor[motor_id]['cur_pos'] = tmp[str(motor_id)]['cur_pos'] # pulse
-            self.motor[motor_id]['cur_velo'] = tmp[str(motor_id)]['cur_velo'] # pulse / ms
 #         for servo_id in self.servo.keys():
 #             self.servo[servo_id]['cur_pos'] = tmp[str(config.END_EFFECTOR_ID)]['ch{}_pos'.format(servo_id)]
 
-        self.depth = tmp[str(config.END_EFFECTOR_ID)]['range']
-        if self.depth == 65535:
-            self.depth = 100
+        # self.depth = tmp[str(config.END_EFFECTOR_ID)]['range']
+        # if self.depth == 65535:
+        #     self.depth = 100
 
-        for i in range(len(self.MOTOR_GROUP)):
-            self.position[i] = self.motor[self.MOTOR_GROUP[i][0]]['cur_pos'] / self.motor[self.MOTOR_GROUP[i][0]]['cpr']
-            self.velocity[i] = self.motor[self.MOTOR_GROUP[i][0]]['cur_velo'] / self.motor[self.MOTOR_GROUP[i][0]]['cpr']
+        for i in range(len(config.MOTOR_GROUP)):
+            self.position[i], self.velocity[i] = self.motor[config.MOTOR_GROUP[i][0]].get_curr()
 
         self.position[3] += config.arm_start_position
         self.position[4] += config.arm_min_workspace
@@ -295,29 +208,17 @@ class Planner:
         url = "{}/set".format(config.url)
         data = {"token": generate_otp()}
 
-        motor = {}
-        for motor_id in self.motor.keys():
-            motor[motor_id] = {
-                'mode': 1,
-                'enable' : self.motor[motor_id]['en'],
-                'goto_pos' : self.motor[motor_id]['goto_pos'],
-                'goto_velo' : self.motor[motor_id]['goto_velo'],
-            }
-            if motor[motor_id]['goto_velo'] == 0:
-                motor[motor_id]['goal_pos'] = motor[motor_id]['goto_pos']
-        data.update(motor)
-#         pprint.pprint (self.motor['forward'])
-
-        servo = {}
-        for servo_id in self.servo.keys():
-            servo.update({
-                'ch{}_enable'.format(servo_id) : self.servo[servo_id]['en'],
-                'ch{}_pos'.format(servo_id) : self.servo[servo_id]['cur_pos'],
-            })
-        data[config.END_EFFECTOR_ID] = servo
+        # servo = {}
+        # for servo_id in self.servo.keys():
+        #     servo.update({
+        #         'ch{}_enable'.format(servo_id) : self.servo[servo_id]['en'],
+        #         'ch{}_pos'.format(servo_id) : self.servo[servo_id]['cur_pos'],
+        #     })
+        # data[config.END_EFFECTOR_ID] = servo
 #         pprint.pprint(self.position)
 
         result = None
+        self.motor_group1.send()
         try:
             if Planner.Debug:
                 pprint.pprint (data)
@@ -339,15 +240,8 @@ class Planner:
                             
             if i % 2 == 0:
                 self._update()
-            else:
-                for i in self.motor.keys():
-                    self.motor[i]['goto_velo'] = self.motor[i]['goal_velo']
-
-                    length = self.motor[i]['goal_pos'] - self.motor[i]['cur_pos']
-                    length2 = self.motor[i]['goal_velo'] * config.planner_update_time * 1000
-                    length = max(min(length, length2), -length2)
-                    self.motor[i]['goto_pos'] = int(self.motor[i]['cur_pos'] + length)
-#                     pprint.pprint (self.motor['forward'])
+                self.motor_group1.update()
+            else:                
                 self._send_position()
 
             self.delay_time = datetime.datetime.now()
@@ -356,8 +250,8 @@ class Planner:
     def start(self):
         self._is_running = True
 
-        self.cut_mango(False)
-        self.drop_mango(False)
+        # self.cut_mango(False)
+        # self.drop_mango(False)
 
         self.thread = Thread(target=self.loop)
         self.thread.start()
