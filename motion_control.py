@@ -25,15 +25,42 @@ def generate_otp():
     return h.digest()[:8].hex()+timestamp
 
 def get_how_to_turn(source_pos, sink_pos, radius): # pos np.array([x, z])
-    dif_pos = sink_pos - source_pos
-    length = np.linalg.norm(dif_pos)
-    rad = np.arctan(dif_pos[1] / dif_pos[0])
-    
-    radius = radius if length > radius else length
-    x = sink_pos[0] - radius * np.cos(rad)
-    z = sink_pos[1] - radius * np.sin(rad)
+    ck = 1
+    while ck:
+        dif_pos = sink_pos - source_pos
+        length = np.linalg.norm(dif_pos)
+        rad = np.arctan(dif_pos[1] / dif_pos[0]) if dif_pos[0] > 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
+        
+        radius = radius if length > radius else length
+        x = sink_pos[0] - radius * np.cos(rad)
+        z = sink_pos[1] - radius * np.sin(rad)
+
+        if -1e-15 > x > -1e-6: x = 0
+
+        if 0 <= x < config.workspace_x and 0 <= z:
+            ck = 0
+            break
+
+        x_new = x - max(0, min(config.workspace_x, x))
+        z_new = z - max(0, min(config.workspace_z, z))
+        # print (length, x_new, z_new)
+        source_pos[0] += x_new
+        source_pos[1] += z_new + x_new
+
 
     return [rad * 180 / np.pi, x, z]
+
+def plan_turn(cur, goto):
+    # [-360, 360]
+    a = ((cur % 360) + 360) % 360
+    b = ((goto % 360) + 360) % 360
+
+    c = ((goto - cur) + 360) % 360
+    d = ((cur - goto) + 360) % 360
+
+    print (cur, goto, c, d)
+
+    return cur + c if c < d else cur- d
 
 class Planner:
     __instance = None
@@ -61,6 +88,12 @@ class Planner:
         self.position = [0 for i in range(7)] # middle, lift, base, turret, forward
         self.velocity = [0 for i in range(7)] # middle, lift, base, turret, forward
         self.depth = 0
+        self.goal_pos = [0 for i in range(7)]
+
+        self.position[3] += config.arm_start_position
+        self.position[4] += config.arm_min_workspace
+        self.goal_pos[3] += config.arm_start_position
+        self.goal_pos[4] += config.arm_min_workspace
 
         self.motor = {}
         self.motor[config.BASE_MOTOR_ID_L] = driver.DriverMotor(config.BASE_MOTOR_ID_L, ppmm=config.encoder_pulse_base_l)
@@ -84,36 +117,39 @@ class Planner:
         self.servo[config.SERVO_CUTTER]['max_pos'] = config.servo_cutter_open
 
         self.delay_time = datetime.datetime(1970,1,1)
-        self.MOTOR_GROUP = config.MOTOR_GROUP
-        
+        # self.MOTOR_GROUP = config.MOTOR_GROUP
+
+        self.is_update = False
         self.start()
 
-    def move_to(self, x_pos, y_pos, z_pos, speed): # pos in mm, velo in mm/s
+    def move(self, x_pos, y_pos, z_pos, speed = 0):
+        return self.move_to(self.position[4] + x_pos, self.position[1] + y_pos, self.position[5] + z_pos)
+
+    def move_to(self, x_pos, y_pos, z_pos, speed = 0): # pos in mm, velo in mm/s
         # check input
         x_pos = min(max(x_pos, 0), config.workspace_x)
         y_pos = min(max(y_pos, 0), config.workspace_y)
         z_pos = min(max(z_pos, 0), config.workspace_z)
 
         new_pos = np.array([x_pos, z_pos])
-        cur_pos = np.array(self.position[5:7])
-        cur1_pos = np.array([self.position[0], self.position[2]])
+        cur_pos = np.array([self.position[0], self.position[2]])
         
         dif_pos = new_pos - cur_pos
         move_length = np.linalg.norm(dif_pos)
+        # print (config.arm_min_workspace, move_length, config.arm_max_workspace)
 
         pos = list(self.position[0:5])
         pos[1] = y_pos
         velo = list(config.default_spd)
 
-        if config.arm_min_workspace < self.position[4] + move_length < config.arm_max_workspace:
-            pos[4] += move_length            
-        else:
-            pos[4] = config.arm_min_workspace + (config.arm_forward_max_length * 0.0)
+        if not (config.arm_min_workspace < move_length < config.arm_max_workspace):
+            move_length = config.arm_min_workspace + (config.arm_forward_max_length * 0.0)
 
-        rad, x, z = get_how_to_turn(cur1_pos, new_pos, pos[4])
+        rad, x, z = get_how_to_turn(cur_pos, new_pos, move_length)
         pos[0] = x
         pos[2] = z
         pos[3] = rad
+        pos[4] = move_length
 
         self.set_all_position(pos, velo)
 
@@ -135,6 +171,11 @@ class Planner:
                 self.motor[mtd].set_goal(self.motor[item[0]].get_curr()[0], 0)
 
     def is_moving(self): # 
+        if not self.is_update: return True
+
+        if self.motor_group1.is_moving():
+            return True
+
         for id in self.motor:
             if self.motor[id].is_moving():
                 return True
@@ -151,23 +192,42 @@ class Planner:
 
     def set_all_position(self, pos, velo): # x, y, z, deg, arm
         for i in range(len(config.MOTOR_GROUP)):
+            self.goal_pos[i] = pos[i]
             for id in config.MOTOR_GROUP[i]:
                 self.motor[id].enable(1)
-                self.motor[id].set_goal(pos[i], velo[i])
+                if i == 3:
+                    self.motor[id].set_goal( plan_turn(self.position[i] - config.arm_start_position, pos[i] - config.arm_start_position), velo[i])
+                elif i == 4:
+                    self.motor[id].set_goal(pos[i] - config.arm_min_workspace, velo[i])
+                else:
+                    self.motor[id].set_goal(pos[i], velo[i])
+        self.is_update = False
 
     def set_position(self, motor_id, pulse, velo, error_wait = 0):
+        for i in range(len(config.MOTOR_GROUP)):
+            for id in config.MOTOR_GROUP[i]:
+                if id == motor_id:
+                    self.goal_pos[i] = pulse
+                    break
         self.motor[motor_id].enable(1)
-        self.motor[motor_id].set_goal(pulse, velo, False)
+        self.motor[motor_id].set_goal(pulse * self.motor[motor_id].ppmm, velo, False)
         if wait:
             while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
                 time.sleep(0.5)
+        self.is_update = False
 
     def set_pulse(self, motor_id, pulse, velo, error_wait = 0):
+        for i in range(len(config.MOTOR_GROUP)):
+            for id in config.MOTOR_GROUP[i]:
+                if id == motor_id:
+                    self.goal_pos[i] = pulse / self.motor[motor_id].ppmm
+                    break
         self.motor[motor_id].enable(1)
         self.motor[motor_id].set_goal(pulse, velo, True)
         if wait:
-            while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
+            while abs(self.motor[motor_id].get_curr()[0] * self.motor[motor_id].ppmm - pulse) >= error_wait:
                 time.sleep(0.5)
+        self.is_update = False
 
     def _update(self):
         result = {}
@@ -203,6 +263,8 @@ class Planner:
         self.position[4] += config.arm_min_workspace
         self.position[5] = self.position[0] + self.position[4] * np.cos(self.position[3] * Planner.degToRad) # arm x
         self.position[6] = self.position[2] + self.position[4] * np.sin(self.position[3] * Planner.degToRad) # arm z
+
+        self.is_update = True
 
     def _send_position(self):
         url = "{}/set".format(config.url)
@@ -256,5 +318,12 @@ class Planner:
         self.thread = Thread(target=self.loop)
         self.thread.start()
 
+        return self
+
     def stop(self):
         self._is_running = False
+
+    def __str__(self):
+        txt = '\nnow position -> x: {}, y:{}, z:{}, deg:{}, arm:{}\n'.format(self.position[0], self.position[1], self.position[2], self.position[3], self.position[4])
+        txt += 'goal position -> x: {}, y:{}, z:{}, deg:{}, arm:{}\n'.format(self.goal_pos[0], self.goal_pos[1], self.goal_pos[2], self.goal_pos[3], self.goal_pos[4])
+        return txt

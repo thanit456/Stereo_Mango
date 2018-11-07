@@ -17,6 +17,8 @@ if sys.version_info >= (3, 0):
 else:
 	from Queue import Queue
 
+import config
+
 secret_key = b'Eic981234'
 
 def generate_otp():
@@ -36,9 +38,10 @@ class DriverMotor:
 		self.moving_threshold = 1
 		self.delay_time = 4 + 1.5 + 3.5 #ms
 
-		self.set_mode(1)
+		# self.set_mode(1)
 		# self.working_length = 1000 # mm
 
+		self.en = 0
 		self.cur_pos = 0
 		self.cur_velo = 0
 		self.goal_pos = 0
@@ -53,7 +56,7 @@ class DriverMotor:
 
 	def add_sync_group(self, group):
 		self.sync_group = group
-		self.group_id = group_id.get_index()
+		self.group_id = group.get_index()
 
 	def get_id(self):
 		return self.id
@@ -65,7 +68,7 @@ class DriverMotor:
 	def set_max_movement(self, max_m):
 		self.max_length = max_m
 
-		if group_id < 0:
+		if self.group_id < 0:
 			if self.ppmm == 0:
 				raise Exception('Set pulse per mm before call this function.')
 
@@ -77,7 +80,7 @@ class DriverMotor:
 	def set_min_movement(self, min_m):
 		self.min_length = min_m
 
-		if group_id < 0:
+		if self.self.group_id < 0:
 			if self.ppmm == 0:
 				raise Exception('Set pulse per mm before call this function.')
 
@@ -141,7 +144,7 @@ class DriverMotor:
 			self.goal_pos = goal
 		self.goal_velo = velo
 
-		if group_id < 0:
+		if self.group_id < 0:
 			try:
 				return self._post('set', {"goto_pos": self.goal_pos, 'goto_velo': self.goal_velo})
 			except Exception as e:
@@ -150,7 +153,7 @@ class DriverMotor:
 	def enable(self, en = 1):
 		self.en = en
 
-		if group_id < 0:
+		if self.group_id < 0:
 			try:
 				return self._post('set', {'enable': 1})
 			except Exception as e:
@@ -199,7 +202,7 @@ class DriverMotor:
 
 
 	def is_moving(self):
-		return self.cur_velo > self.moving_threshold
+		return np.abs(self.cur_velo) > self.moving_threshold
 
 	def reset_position(self):
 		try:

@@ -34,37 +34,35 @@ def state_a1():
     x_diff = (config.workspace_x / 2) - cur_pos[0]
     y_diff = config.workspace_y - cur_pos[1]
       
-    planner.force(config.LIFT_MOTOR_ID_L, 64000, 1)
-    planner.force(config.LIFT_MOTOR_ID_R, 64000, 1, 300)
+    planner.set_pulse(config.LIFT_MOTOR_ID_L, 64000, 1)
+    planner.set_pulse(config.LIFT_MOTOR_ID_R, 64000, 1, 300)
     return True
-#     planner.move_stereo_cam(x_diff, y_diff, 0, config.default_speed)
-#     return not planner.is_moving() and (math.sqrt(x_diff**2 + y_diff**2) <= config.accept_move)
 
-deg_max_score = (0, 0) # deg, score
-def state_find_deg_maxscore(tf_session, mango_model, camera):
-    global deg_max_score
-    frame = camera['device'].read()
-    if not frame[0]:
-        print ("Camera Failed")
-        return False
+# deg_max_score = (0, 0) # deg, score
+# def state_find_deg_maxscore(tf_session, mango_model, camera):
+#     global deg_max_score
+#     frame = camera['device'].read()
+#     if not frame[0]:
+#         print ("Camera Failed")
+#         return False
         
-    frame = frame[1]
-    image_height, image_width, ch = frame.shape
+#     frame = frame[1]
+#     image_height, image_width, ch = frame.shape
         
-    result = mod.detect(frame, mango_model, sess, 0.7, False)
-    if 'center' in result.keys():
-        if result['score'] > deg_max_score[1]:
-            deg_max_score = (planner.get_arm_deg(), result['score'])
+#     result = mod.detect(frame, mango_model, sess, 0.7, False)
+#     if 'center' in result.keys():
+#         if result['score'] > deg_max_score[1]:
+#             deg_max_score = (planner.get_arm_deg(), result['score'])
         
-            deg_go = config.deg_find_score if result['center'][0] > (image_width / 2) else -1 * config.deg_find_score
-            planner.move_single_cam(0, 0, 0, deg_go, config.default_speed)
-            return False
+#             deg_go = config.deg_find_score if result['center'][0] > (image_width / 2) else -1 * config.deg_find_score
+#             planner.move_single_cam(0, 0, 0, deg_go, config.default_speed)
+#             return False
         
-        deg_go =  deg_max_score[0] - planner.get_arm_deg()
-        planner.move_single_cam(0, 0, 0, deg_go, config.default_speed)
-        time.sleep(2)
-        return True
-    return False
+#         deg_go =  deg_max_score[0] - planner.get_arm_deg()
+#         planner.move_single_cam(0, 0, 0, deg_go, config.default_speed)
+#         time.sleep(2)
+#         return True
+#     return False
 
 def turn_arm_drop_mango(color = 1):
     if color not in [1, 2]:
@@ -74,42 +72,42 @@ def turn_arm_drop_mango(color = 1):
     planner.move_to_stereo_cam(config.workspace_x/2, cur_pos[1], cur_pos[2], config.default_speed)
     if color == 1:
         
-        planner.force(config.FORWARD_MOTOR_ID, 0, 500, 10000)
+        planner.set_pulse(config.FORWARD_MOTOR_ID, 0, 500, 10000)
         print('A2')
-        planner.force(config.TURRET_MOTOR_ID, 0, 500, 100)
+        planner.set_pulse(config.TURRET_MOTOR_ID, 0, 500, 100)
         print('A3')
-        planner.force(config.MIDDLE_MOTOR_ID, 4400000, 500, 10000)
+        planner.set_pulse(config.MIDDLE_MOTOR_ID, 4400000, 500, 10000)
     else:
         print('B1')
-        planner.force(config.FORWARD_MOTOR_ID, 0, 500, 10000)
+        planner.set_pulse(config.FORWARD_MOTOR_ID, 0, 500, 10000)
         print('B2')
-        planner.force(config.TURRET_MOTOR_ID, 4050, 500, 100)
+        planner.set_pulse(config.TURRET_MOTOR_ID, 4050, 500, 100)
         print('B3')
-        planner.force(config.MIDDLE_MOTOR_ID, 800000, 500, 10000)
+        planner.set_pulse(config.MIDDLE_MOTOR_ID, 800000, 500, 10000)
     #drop_mango()
                      
     return True
 
 def drop_mango():
     print('DROP')
-    planner.drop_mango(True)
-    time.sleep(1.5)
-    planner.cut_mango(False)
-    time.sleep(1.5)
-    planner.drop_mango(False)
-    time.sleep(1.5)
+    # planner.drop_mango(True)
+    # time.sleep(1.5)
+    # planner.cut_mango(False)
+    # time.sleep(1.5)
+    # planner.drop_mango(False)
+    # time.sleep(1.5)
     
     return True
 
 def cut_mango():
-    for i in range(config.cut_count):
-        planner.cut_mango(True)
-        time.sleep(1)
+    # for i in range(config.cut_count):
+    #     planner.cut_mango(True)
+    #     time.sleep(1)
         
-        if i+1 < config.cut_count:
-            planner.cut_mango(False)
-            time.sleep(1)
-    planner.cut_mango(True)
+    #     if i+1 < config.cut_count:
+    #         planner.cut_mango(False)
+    #         time.sleep(1)
+    # planner.cut_mango(True)
     
     return True
 
@@ -128,19 +126,19 @@ if __name__ == '__main__':
         with tf.Session() as sess:
             camera['device'].start()
             for index, item in enumerate(base_position):
-                planner.force(config.LIFT_MOTOR_ID_L, item[1] * config.encoder_pulse_lift_l, 2)
-                planner.force(config.LIFT_MOTOR_ID_R, item[1] * config.encoder_pulse_lift_l, 2, 300)
-                planner.force(config.BASE_MOTOR_ID_L, item[0] * config.encoder_pulse_base_l, 4)
-                planner.force(config.BASE_MOTOR_ID_R, item[0] * config.encoder_pulse_base_l, 4, 400)
+                # planner.set_pulse(config.LIFT_MOTOR_ID_L, item[1] * config.encoder_pulse_lift_l, 2)
+                # planner.set_pulse(config.LIFT_MOTOR_ID_R, item[1] * config.encoder_pulse_lift_l, 2, 300)
+                # planner.set_pulse(config.BASE_MOTOR_ID_L, item[0] * config.encoder_pulse_base_l, 4)
+                # planner.set_pulse(config.BASE_MOTOR_ID_R, item[0] * config.encoder_pulse_base_l, 4, 400)
                     
                 for i in range(2, count_i - 2):
                     for j in range(2, count_j - 1):
                         print('Coord',i,j)
                         state = 0
-                        planner.force(config.BASE_MOTOR_ID_L, item[0] * config.encoder_pulse_base_l, 4)
-                        planner.force(config.BASE_MOTOR_ID_R, item[0] * config.encoder_pulse_base_l, 4, 400)
-                        planner.force(config.FORWARD_MOTOR_ID, 0, 500, 10000)
-                        planner.force(config.TURRET_MOTOR_ID, 2000, 500, 100)
+                        # planner.set_pulse(config.BASE_MOTOR_ID_L, item[0] * config.encoder_pulse_base_l, 4)
+                        # planner.set_pulse(config.BASE_MOTOR_ID_R, item[0] * config.encoder_pulse_base_l, 4, 400)
+                        planner.set_pulse(config.FORWARD_MOTOR_ID, 0, 500, 10000)
+                        planner.set_pulse(config.TURRET_MOTOR_ID, 2000, 500, 100)
                         while True:
                             print(state)
                             if state == 0:
@@ -149,10 +147,10 @@ if __name__ == '__main__':
                                     x = config.workspace_x - x
                                 y = ((view_y / 2) + (view_y * i))
                                 print ("POs x, y: ", x, y)
-                                planner.force(config.MIDDLE_MOTOR_ID, x * config.encoder_pulse_middle, 1000)
-                                planner.force(config.LIFT_MOTOR_ID_L, y * config.encoder_pulse_lift_l, 2)
-                                planner.force(config.LIFT_MOTOR_ID_R, y * config.encoder_pulse_lift_l, 2, 300)
-                                planner.force(config.MIDDLE_MOTOR_ID, x * config.encoder_pulse_middle, 1000, 1000)
+                                planner.set_pulse(config.MIDDLE_MOTOR_ID, x * config.encoder_pulse_middle, 1000)
+                                planner.set_pulse(config.LIFT_MOTOR_ID_L, y * config.encoder_pulse_lift_l, 2)
+                                planner.set_pulse(config.LIFT_MOTOR_ID_R, y * config.encoder_pulse_lift_l, 2, 300)
+                                planner.set_pulse(config.MIDDLE_MOTOR_ID, x * config.encoder_pulse_middle, 1000, 1000)
                                 state = 1
                                 
                             elif state == 1:
@@ -180,9 +178,9 @@ if __name__ == '__main__':
                                         vs.stop()
                                     
                                     mango_color = vs.get_color()
-                                    planner.move_single_cam(0, 50, 0, 0, config.default_speed) # test z
+                                    planner.move(0, 50, 0, config.default_speed) # test z
                                     time.sleep(100 / config.default_speed)
-                                    planner.move_single_cam(0, 0, 90, 0, config.default_speed) # test z
+                                    planner.move(0, 0, 90, config.default_speed) # test z
                                     time.sleep(70 / config.default_speed)
                                     
 #                                     if planner.get_depth() > 500:
@@ -201,14 +199,14 @@ if __name__ == '__main__':
                                 cur_pos = planner.get_pos()
                                 x_pos = config.middle_position[mango_color] - cur_pos[0]
                                 
-                                planner.move_stereo_cam(x_pos, 0, 0, config.default_speed)
+                                planner.move(x_pos, 0, 0, config.default_speed)
                                 
-                                if planner.is_moving() and (x_pos <= config.accept_move):
+                                if planner.is_moving():
                                     state = 6
                             
                             elif state == 6:
                                 drop_mango()
-                                planner.force(config.TURRET_MOTOR_ID, 2000, 500, 100)
+                                planner.set_pulse(config.TURRET_MOTOR_ID, 2000, 500, 100)
                                 state = 0
                                 
                             elif state == 7:

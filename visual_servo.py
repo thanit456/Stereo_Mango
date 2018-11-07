@@ -118,7 +118,8 @@ class VisualServo:
             diff_y = min(diff_y, config.visual_max_move) * (zf / (zm + z_length_sum))
             diff_z = min(diff_z, config.visual_max_move) * (zf / (zm + z_length_sum))
 #             diff_y=0
-            planner.move_single_cam(diff_x, diff_y, diff_z, 0, config.default_speed)
+            planner.move(diff_x, diff_y, diff_z, 0, config.default_speed)
+            while planner.is_moving(): time.sleep(0.1)
             error_count = 0
         
             self.color = result['class']

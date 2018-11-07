@@ -3,6 +3,7 @@ import hashlib
 import requests
 import datetime
 import config
+from pprint import pprint
 
 secret_key = b'Eic981234'
 group_id = 1
@@ -51,9 +52,16 @@ class Group:
             self.list_driver[motor_id].cur_pos = tmp[str(motor_id)]['cur_pos'] # pulse
             self.list_driver[motor_id].cur_velo = tmp[str(motor_id)]['cur_velo'] # pulse / ms
 
+    def is_moving(self):
+        # self.get()
+        for i in self.list_driver.keys():
+            if self.list_driver[i].is_moving():
+                return True
+        return False
+
     def update(self):
         for i in self.list_driver.keys():
-            self.list_driver[i].goto_velo = self.motor[i].goal_velo
+            self.list_driver[i].goto_velo = self.list_driver[i].goal_velo
 
             length = self.list_driver[i].goal_pos - self.list_driver[i].cur_pos
             length2 = self.list_driver[i].goal_velo * config.planner_update_time * 1000
@@ -69,9 +77,9 @@ class Group:
         for motor_id in self.list_driver.keys():
             motor[motor_id] = {
                 'mode': 1,
-                'enable' : self.motor[motor_id].en,
-                'goto_pos' : self.motor[motor_id].goto_pos,
-                'goto_velo' : self.motor[motor_id].goto_velo,
+                'enable' : self.list_driver[motor_id].en,
+                'goto_pos' : self.list_driver[motor_id].goto_pos,
+                'goto_velo' : self.list_driver[motor_id].goto_velo,
             }
         data.update(motor)
 
@@ -80,7 +88,9 @@ class Group:
             result = requests.post(url, json=data)
             #pprint.pprint (data)
         except Exception as e:
-            print ("Motor_Control", e)
+            print ("sync_group - send: \t", e)
             return 
         if (result.status_code != 200):
             print ('HTTP Error: {}'.format(result.status_code))
+
+        # pprint (data)

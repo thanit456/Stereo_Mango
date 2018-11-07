@@ -26,16 +26,16 @@ encoder_pulse_middle    = (160 * 1024 * 4) / (8 * 20)
 encoder_pulse_turret    = (2000 * 4) / 360
 encoder_pulse_forward   = (160 * 1024 * 4) / (5 * 24)
 
-default_spd = [2, 2, 2, 2, 2]
+default_spd = [300, 2, 2, 2, 300]
 
 _moving_threshold = {
-	BASE_MOTOR_ID_L: 1,
-	BASE_MOTOR_ID_R: 1,
-	LIFT_MOTOR_ID_L: 1,
-	LIFT_MOTOR_ID_R: 1,
-	MIDDLE_MOTOR_ID: 300,
-	TURRET_MOTOR_ID: 1,
-	FORWARD_MOTOR_ID: 1,
+	BASE_MOTOR_ID_L: 5,
+	BASE_MOTOR_ID_R: 5,
+	LIFT_MOTOR_ID_L: 5,
+	LIFT_MOTOR_ID_R: 5,
+	MIDDLE_MOTOR_ID: 17,
+	TURRET_MOTOR_ID: 3,
+	FORWARD_MOTOR_ID: 17,
 }
 
 CAMERA_END_EFFECTOR = 'http://127.0.0.1:8082/stream.mjpg?w=1280&h=720'
@@ -65,7 +65,7 @@ middle_position = {
 url = "http://localhost:8080/api"
 
 # section robot
-workspace_z         = 6000 # tune
+workspace_z         = 15000 # tune
 workspace_y         = 1260 # tune
 workspace_x         = 1269.5 # tune
 workspace_arm_offset_x = 195.3125 # tune
