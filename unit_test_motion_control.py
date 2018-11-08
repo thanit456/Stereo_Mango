@@ -1,35 +1,36 @@
-from motion_control import Planner
+from motion_control import Planner, Control
 import config
 import time
 import pprint
 import datetime
 
-def wait(plan, t = 5):
+def wait(con, t = 5):
     st = datetime.datetime.now()
-    while plan.is_moving(): # or (datetime.datetime.now() - st).seconds < t:
-        print (plan)
+    while con.is_moving(): # or (datetime.datetime.now() - st).seconds < t:
+        print (con)
         time.sleep(1)
 
 def main():
-    planner = Planner.getInstance()
-    # planner.start()
-    planner.move_to(0, 500, 1000)
-    wait(planner)
-    print (planner)
+    con = Control.getInstance()
 
-    planner.move_to(500, 500, 1500)
-    wait(planner)
-    print (planner)
-    
-    planner.move_to(500, 500, 1000)
-    wait(planner)
-    print (planner)
-    
-    planner.move_to(1000, 500, 1000)
-    wait(planner)
-    print (planner)
+    time.sleep(1)
+    con.move_to(0, 500, 1000)
+    wait(con)
+    print (con)
 
-    planner.stop()
+    con.move_to(500, 500, 1500)
+    wait(con)
+    print (con)
+    
+    con.move_to(500, 500, 1000)
+    wait(con)
+    print (con)
+    
+    con.move_to(1000, 500, 1000)
+    wait(con)
+    print (con)
+
+    con.stop()
 
 if __name__ == '__main__':    
     main()

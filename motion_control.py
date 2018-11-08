@@ -24,31 +24,29 @@ def generate_otp():
     h.update(timestamp.encode() + secret_key)
     return h.digest()[:8].hex()+timestamp
 
-def get_how_to_turn(source_pos, sink_pos, radius): # pos np.array([x, z])
+def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
     ck = 1
     while ck:
-        dif_pos = sink_pos - source_pos
+        dif_pos = end_pos - middle_pos
         length = np.linalg.norm(dif_pos)
-        radius = radius if length > radius else length
-        rad = np.arctan(dif_pos[1] / dif_pos[0]) if dif_pos[0] > 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
-        x = sink_pos[0] - radius * np.cos(rad)
-        z = sink_pos[1] - radius * np.sin(rad)
+        
+        radius = config.arm_min_workspace if length > config.arm_max_workspace else length
+        rad = np.arctan(dif_pos[1] / dif_pos[0]) - np.pi if dif_pos[0] > 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
+        x = end_pos[0] - radius * np.cos(rad) # middle
+        z = end_pos[1] - radius * np.sin(rad) # middle
 
-        if -1e-15 > x > -1e-6: x = 0
-
-        workspace_x = config.offset_x_min + config.workspace_x + config.offset_x_max
-        if 0 <= x < workspace_x and 0 <= z:
+        x -= config.offset_x_min
+        if -1e-15 > x > -1e-1: x = 0
+        if (0 <= x < config.workspace_x) and 0 <= z:
             ck = 0
             break
 
         x_new = x - max(0, min(config.workspace_x, x))
         z_new = z - max(0, min(config.workspace_z, z))
-        # print (length, x_new, z_new)
-        source_pos[0] += x_new
-        source_pos[1] += z_new + x_new
+        middle_pos -= np.array([int(x_new), 0])
+        print (rad * 180 / np.pi, x, x_new, z_new, middle_pos, dif_pos)
 
-
-    return [rad * 180 / np.pi, x, z]
+    return [x + config.offset_x_min, z, rad * 180 / np.pi, radius]
 
 def plan_turn(cur, goto):
     # [-360, 360]
@@ -62,6 +60,7 @@ def plan_turn(cur, goto):
 
     return cur + c if c < d else cur- d
 
+import sys
 if sys.version_info >= (3, 0):
     from queue import Queue
 # otherwise, import the Queue class for Python 2.7
@@ -173,6 +172,7 @@ class Control:
         # self.MOTOR_GROUP = config.MOTOR_GROUP
 
         self.is_update = False
+        self.thread = None
         self.start()
 
     def plane_move(self, x_pos, y_pos, z_pos, speed = 0):
@@ -192,25 +192,12 @@ class Control:
         y_pos = min(max(y_pos, 0), config.workspace_y)
         z_pos = min(max(z_pos, 0), config.workspace_z)
 
-        new_pos = np.array([x_pos, z_pos])
-        cur_pos = np.array([self.position[0], self.position[2]])
-        
-        dif_pos = new_pos - cur_pos
-        move_length = np.linalg.norm(dif_pos)
-        # print (config.arm_min_workspace, move_length, config.arm_max_workspace)
+        end_pos = np.array([x_pos, z_pos])
+        middle_pos = np.array([self.position[0], self.position[2]])
 
-        pos = list(self.position[0:5])
-        pos[1] = y_pos
+        x, z, a, rad = inverse_kinematics(middle_pos, end_pos)
         velo = list(config.default_spd)
-
-        if not (config.arm_min_workspace < move_length < config.arm_max_workspace):
-            move_length = config.arm_min_workspace + (config.arm_forward_max_length * 0.0)
-
-        rad, x, z = get_how_to_turn(cur_pos, new_pos, move_length)
-        pos[0] = x
-        pos[2] = z
-        pos[3] = rad
-        pos[4] = move_length
+        pos = [x, y_pos, z, rad, a]
 
         self.set_all_position(pos, velo)
 
@@ -256,7 +243,9 @@ class Control:
             self.goal_pos[i] = pos[i]
             for id in config.MOTOR_GROUP[i]:
                 self.motor[id].enable(1)
-                if i == 3:
+                if i == 0:
+                    self.motor[id].set_goal(pos[i] - config.offset_x_min, velo[i])
+                elif i == 3:
                     self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos[i] - config.arm_start_position), velo[i])
                 elif i == 4:
                     self.motor[id].set_goal(pos[i] - config.arm_min_workspace, velo[i])
@@ -320,6 +309,7 @@ class Control:
         for i in range(len(config.MOTOR_GROUP)):
             self.position[i], self.velocity[i] = self.motor[config.MOTOR_GROUP[i][0]].get_curr()
 
+        self.position[0] += config.offset_x_min
         self.position[3] += config.arm_start_position
         self.position[4] += config.arm_min_workspace
         self.position[5] = self.position[0] + self.position[4] * np.cos(self.position[3] * np.pi / 180) # arm x
@@ -342,8 +332,6 @@ class Control:
         result = None
         self.motor_group1.send()
         try:
-            if Planner.Debug:
-                pprint.pprint (data)
             result = requests.post(url, json=data)
             #pprint.pprint (data)
         except Exception as e:
@@ -374,14 +362,15 @@ class Control:
 
         # self.cut_mango(False)
         # self.drop_mango(False)
-
-        self.thread = Thread(target=self.loop)
-        self.thread.start()
+        if self.thread == None:
+            self.thread = Thread(target=self.loop)
+            self.thread.start()
 
         return self
 
     def stop(self):
         self._is_running = False
+        self.thread = None
 
     def __str__(self):
         txt = '\nnow position -> x: {}, y:{}, z:{}, deg:{}, arm:{}\n'.format(self.position[0], self.position[1], self.position[2], self.position[3], self.position[4])
