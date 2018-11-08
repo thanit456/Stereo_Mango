@@ -12,8 +12,8 @@ def wait(con, t = 5):
 
 def main():
     con = Control.getInstance()
-
-    time.sleep(1)
+    
+    # print (con)
     con.move_to(0, 500, 1000)
     wait(con)
     print (con)

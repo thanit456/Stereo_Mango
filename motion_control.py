@@ -29,22 +29,23 @@ def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
     while ck:
         dif_pos = end_pos - middle_pos
         length = np.linalg.norm(dif_pos)
-        
+
         radius = config.arm_min_workspace if length > config.arm_max_workspace else length
-        rad = np.arctan(dif_pos[1] / dif_pos[0]) - np.pi if dif_pos[0] > 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
+        rad = np.arctan(dif_pos[1] / dif_pos[0]) - np.pi if dif_pos[0] != 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
         x = end_pos[0] - radius * np.cos(rad) # middle
         z = end_pos[1] - radius * np.sin(rad) # middle
 
         x -= config.offset_x_min
         if -1e-15 > x > -1e-1: x = 0
-        if (0 <= x < config.workspace_x) and 0 <= z:
+        if -1e-15 > z > -1e-1: z = 0
+        if (0 <= x <= config.workspace_x) and 0 <= z:
             ck = 0
             break
 
         x_new = x - max(0, min(config.workspace_x, x))
         z_new = z - max(0, min(config.workspace_z, z))
-        middle_pos -= np.array([int(x_new), 0])
-        print (rad * 180 / np.pi, x, x_new, z_new, middle_pos, dif_pos)
+        middle_pos -= np.array([x_new, z_new], dtype=np.float64)
+        # print (rad * 180 / np.pi, x, x_new, z_new, middle_pos, dif_pos)
 
     return [x + config.offset_x_min, z, rad * 180 / np.pi, radius]
 
@@ -174,6 +175,7 @@ class Control:
         self.is_update = False
         self.thread = None
         self.start()
+        time.sleep(3)
 
     def plane_move(self, x_pos, y_pos, z_pos, speed = 0):
         rad = (self.position[3]) * np.pi / 180
@@ -192,10 +194,10 @@ class Control:
         y_pos = min(max(y_pos, 0), config.workspace_y)
         z_pos = min(max(z_pos, 0), config.workspace_z)
 
-        end_pos = np.array([x_pos, z_pos])
-        middle_pos = np.array([self.position[0], self.position[2]])
+        end_pos = np.array([x_pos, z_pos], dtype=np.float64)
+        middle_pos = np.array([self.position[0], self.position[2]], dtype=np.float64)
 
-        x, z, a, rad = inverse_kinematics(middle_pos, end_pos)
+        x, z, rad, a = inverse_kinematics(middle_pos, end_pos)
         velo = list(config.default_spd)
         pos = [x, y_pos, z, rad, a]
 
