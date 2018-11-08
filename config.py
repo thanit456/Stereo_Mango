@@ -70,6 +70,9 @@ workspace_y         = 1260 # tune
 workspace_x         = 1269.5 # tune
 workspace_arm_offset_x = 195.3125 # tune
 
+offset_x_min = 0 - middle_position[0] + arm_min_workspace
+offset_x_max = workspace_x - middle_position[1] + arm_min_workspace
+
 # Section arm configure
 arm_start_position = 0 # tune
 arm_dist_from_joint_turret = 840 # tune

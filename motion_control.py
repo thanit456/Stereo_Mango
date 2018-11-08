@@ -29,15 +29,15 @@ def get_how_to_turn(source_pos, sink_pos, radius): # pos np.array([x, z])
     while ck:
         dif_pos = sink_pos - source_pos
         length = np.linalg.norm(dif_pos)
-        rad = np.arctan(dif_pos[1] / dif_pos[0]) if dif_pos[0] > 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
-        
         radius = radius if length > radius else length
+        rad = np.arctan(dif_pos[1] / dif_pos[0]) if dif_pos[0] > 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
         x = sink_pos[0] - radius * np.cos(rad)
         z = sink_pos[1] - radius * np.sin(rad)
 
         if -1e-15 > x > -1e-6: x = 0
 
-        if 0 <= x < config.workspace_x and 0 <= z:
+        workspace_x = config.offset_x_min + config.workspace_x + config.offset_x_max
+        if 0 <= x < workspace_x and 0 <= z:
             ck = 0
             break
 
@@ -58,16 +58,23 @@ def plan_turn(cur, goto):
     c = ((goto - cur) + 360) % 360
     d = ((cur - goto) + 360) % 360
 
-    print (cur, goto, c, d)
+    # print (cur, goto, c, d)
 
     return cur + c if c < d else cur- d
 
+if sys.version_info >= (3, 0):
+    from queue import Queue
+# otherwise, import the Queue class for Python 2.7
+else:
+    from Queue import Queue
 class Planner:
     __instance = None
-    degToRad = np.pi / 180
-    radToDeg = 180 * np.pi
-    
-    Debug = False
+
+    MOVE = 0
+    MOVE_TO = 1
+    PLANE_MOVE = 2
+    SET_PULSE = 3
+    SET_GOAL = 4
 
     @staticmethod
     def getInstance():
@@ -77,11 +84,57 @@ class Planner:
         return Planner.__instance 
 
     """docstring for Planner"""
-    def __init__(self):
+    def __init__(self, queueSize = 64):
         if Planner.__instance != None:
             raise Exception("This class is a singleton!")
         else:
             Planner.__instance = self
+
+
+        self.queue = Queue(maxsize=max(queueSize, 32))
+        self.control = Control()
+        self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_goal]
+
+    def put(self, cmd, args):
+        if not self.queue.full():
+            return self.queue.put((cmd, tuple(args)))
+        return False
+
+    def start(self):
+        if self.thread == None:
+            self._is_running = 1
+            self.thread = Thread(target=self.loop)
+            self.thread.start()
+
+    def loop(self):
+        while self._is_running:
+            block = self.queue.get()
+            self.cmd[block[0]](*block[1])
+
+            while self.control.is_moving():
+                time.sleep(0.1)
+
+    def stop(self):
+        self._is_running = 0
+        self.thread = None
+        self.control.stop()
+
+class Control:
+    __instance = None
+
+    @staticmethod
+    def getInstance():
+        """ Static access method. """
+        if Control.__instance == None:
+            Control()
+        return Control.__instance 
+
+    """docstring for Planner"""
+    def __init__(self):
+        if Control.__instance != None:
+            raise Exception("This class is a singleton!")
+        else:
+            Control.__instance = self
 
         self.lock = Lock()
 
@@ -122,12 +175,20 @@ class Planner:
         self.is_update = False
         self.start()
 
+    def plane_move(self, x_pos, y_pos, z_pos, speed = 0):
+        rad = (self.position[3]) * np.pi / 180
+        x = x_pos * np.cos(rad) - z_pos * np.sin(rad)
+        z = x_pos * np.sin(rad) + z_pos * np.cos(rad)
+
+        return self.move(x, y_pos, z, speed)
+
     def move(self, x_pos, y_pos, z_pos, speed = 0):
         return self.move_to(self.position[4] + x_pos, self.position[1] + y_pos, self.position[5] + z_pos)
 
     def move_to(self, x_pos, y_pos, z_pos, speed = 0): # pos in mm, velo in mm/s
         # check input
-        x_pos = min(max(x_pos, 0), config.workspace_x)
+        workspace_x = config.offset_x_min + config.workspace_x + config.offset_x_max
+        x_pos = min(max(x_pos, 0), workspace_x)
         y_pos = min(max(y_pos, 0), config.workspace_y)
         z_pos = min(max(z_pos, 0), config.workspace_z)
 
@@ -196,7 +257,7 @@ class Planner:
             for id in config.MOTOR_GROUP[i]:
                 self.motor[id].enable(1)
                 if i == 3:
-                    self.motor[id].set_goal( plan_turn(self.position[i] - config.arm_start_position, pos[i] - config.arm_start_position), velo[i])
+                    self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos[i] - config.arm_start_position), velo[i])
                 elif i == 4:
                     self.motor[id].set_goal(pos[i] - config.arm_min_workspace, velo[i])
                 else:
@@ -249,8 +310,8 @@ class Planner:
             print ("Motor Control", e)
             return 
         
-#         for servo_id in self.servo.keys():
-#             self.servo[servo_id]['cur_pos'] = tmp[str(config.END_EFFECTOR_ID)]['ch{}_pos'.format(servo_id)]
+        # for servo_id in self.servo.keys():
+        #     self.servo[servo_id]['cur_pos'] = tmp[str(config.END_EFFECTOR_ID)]['ch{}_pos'.format(servo_id)]
 
         # self.depth = tmp[str(config.END_EFFECTOR_ID)]['range']
         # if self.depth == 65535:
@@ -261,8 +322,8 @@ class Planner:
 
         self.position[3] += config.arm_start_position
         self.position[4] += config.arm_min_workspace
-        self.position[5] = self.position[0] + self.position[4] * np.cos(self.position[3] * Planner.degToRad) # arm x
-        self.position[6] = self.position[2] + self.position[4] * np.sin(self.position[3] * Planner.degToRad) # arm z
+        self.position[5] = self.position[0] + self.position[4] * np.cos(self.position[3] * np.pi / 180) # arm x
+        self.position[6] = self.position[2] + self.position[4] * np.sin(self.position[3] * np.pi / 180) # arm z
 
         self.is_update = True
 
@@ -277,7 +338,6 @@ class Planner:
         #         'ch{}_pos'.format(servo_id) : self.servo[servo_id]['cur_pos'],
         #     })
         # data[config.END_EFFECTOR_ID] = servo
-#         pprint.pprint(self.position)
 
         result = None
         self.motor_group1.send()
@@ -327,3 +387,4 @@ class Planner:
         txt = '\nnow position -> x: {}, y:{}, z:{}, deg:{}, arm:{}\n'.format(self.position[0], self.position[1], self.position[2], self.position[3], self.position[4])
         txt += 'goal position -> x: {}, y:{}, z:{}, deg:{}, arm:{}\n'.format(self.goal_pos[0], self.goal_pos[1], self.goal_pos[2], self.goal_pos[3], self.goal_pos[4])
         return txt
+
