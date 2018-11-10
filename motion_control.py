@@ -74,7 +74,7 @@ class Planner:
     MOVE_TO = 1
     PLANE_MOVE = 2
     SET_PULSE = 3
-    SET_GOAL = 4
+    SET_POSITION = 4
 
     @staticmethod
     def getInstance():
@@ -93,7 +93,13 @@ class Planner:
 
         self.queue = Queue(maxsize=max(queueSize, 32))
         self.control = Control()
-        self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_goal]
+        self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position]
+
+    def is_empty(self):
+        return self.queue.empty():
+
+    def get_control(self):
+        return self.control
 
     def put(self, cmd, args):
         if not self.queue.full():
@@ -257,12 +263,20 @@ class Control:
 
     def set_position(self, motor_id, pulse, velo, error_wait = 0):
         for i in range(len(config.MOTOR_GROUP)):
+            ck = 0
             for id in config.MOTOR_GROUP[i]:
                 if id == motor_id:
                     self.goal_pos[i] = pulse
+                    ck = 1
                     break
-        self.motor[motor_id].enable(1)
-        self.motor[motor_id].set_goal(pulse * self.motor[motor_id].ppmm, velo, False)
+            if ck:
+                for id in config.MOTOR_GROUP[i]:
+                    self.motor[id].enable(1)
+                    if i == 3:
+                        pos = pulse * self.motor[motor_id].ppmm
+                        self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position), velo[i], False)
+                    else:
+                        self.motor[id].set_goal(pulse * self.motor[motor_id].ppmm, velo, False)
         if wait:
             while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
                 time.sleep(0.5)
@@ -270,12 +284,20 @@ class Control:
 
     def set_pulse(self, motor_id, pulse, velo, error_wait = 0):
         for i in range(len(config.MOTOR_GROUP)):
+            ck = 0
             for id in config.MOTOR_GROUP[i]:
                 if id == motor_id:
                     self.goal_pos[i] = pulse / self.motor[motor_id].ppmm
+                    ck = 1
                     break
-        self.motor[motor_id].enable(1)
-        self.motor[motor_id].set_goal(pulse, velo, True)
+            if ck:
+                for id in config.MOTOR_GROUP[i]:
+                    self.motor[id].enable(1)
+                    if i == 3:
+                        pos = pulse / self.motor[motor_id].ppmm
+                        self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position), velo[i], False)
+                    else:
+                        self.motor[id].set_goal(pulse, velo, True)
         if wait:
             while abs(self.motor[motor_id].get_curr()[0] * self.motor[motor_id].ppmm - pulse) >= error_wait:
                 time.sleep(0.5)

@@ -2,220 +2,158 @@
 
 import cv2
 import config
-import visual_servo
-import tensorflow as tf
-from motion_control import Planner
-from mango_detection import mango_detector as mod
 import driver
 import math
 import time
+import numpy as np
 
-camera = {
-    'device' : driver.DriverCamera(config.CAMERA_END_EFFECTOR, 2),
-    'focus_length' : config.camera_focus_length,
-    'offset' : [0, 0, 0], # x, y, z
-}
+# detction
+# from mango_detection.yolo import yolo
 
-base_position = [
-    (3239.7674, 0, 90),
-]
+# visual servo
+from visual_servo import VisualServo
+from motion_control import Planner
 
-planner = Planner.getInstance()
-mango_model = mod.load_model('mango_detection/model/', 'mango_2.0.pb')
+cam_on_arm = driver.DriverCamera(config.CAMERA_ON_ARM)
+cam_end_arm = driver.DriverCamera(config.CAMERA_END_EFFECTOR)
+planner = Planner()
 
-def get_distance(pos1, pos2):
-    def diff(a1, a2):
-        return np.abs(a1 - a2)
-    return math.sqrt(diff(pos1[0], pos2[0])**2 + diff(pos1[1], pos2[1])**2 + diff(pos1[2], pos2[2]))
+tree_position = [1000-1200, 1000+1200, 3000-1200, 3000+1200, 5000-1200, 5000+1200]
+y_pos_for_turn_arm = 1000
+y_pos_start = 500
+y_pos_before_turn = 0
 
-def state_a1():
-    cur_pos = planner.get_pos()
-    
-    x_diff = (config.workspace_x / 2) - cur_pos[0]
-    y_diff = config.workspace_y - cur_pos[1]
-      
-    planner.set_pulse(config.LIFT_MOTOR_ID_L, 64000, 1)
-    planner.set_pulse(config.LIFT_MOTOR_ID_R, 64000, 1, 300)
-    return True
+def lift_up(state = 0):
+    print ("lift up, state:", state)
+    planner.add(planner.SET_PULSE, [config.FORWARD_MOTOR_ID, 0, config.default_spd[4], 0])
+    # lift up
+    planner.add(planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_for_turn_arm, config.default_spd[1], 0])
+    planner.add(planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x / 2, config.default_spd[0], 0])
+    # turn arm
+    if state > 0:
+        planner.add(planner.SET_POSITION, [config.TURRET_MOTOR_ID, 0 if state == 1 else 180, config.default_spd[3], 0])
 
-# deg_max_score = (0, 0) # deg, score
-# def state_find_deg_maxscore(tf_session, mango_model, camera):
-#     global deg_max_score
-#     frame = camera['device'].read()
-#     if not frame[0]:
-#         print ("Camera Failed")
-#         return False
-        
-#     frame = frame[1]
-#     image_height, image_width, ch = frame.shape
-        
-#     result = mod.detect(frame, mango_model, sess, 0.7, False)
-#     if 'center' in result.keys():
-#         if result['score'] > deg_max_score[1]:
-#             deg_max_score = (planner.get_arm_deg(), result['score'])
-        
-#             deg_go = config.deg_find_score if result['center'][0] > (image_width / 2) else -1 * config.deg_find_score
-#             planner.move_single_cam(0, 0, 0, deg_go, config.default_speed)
-#             return False
-        
-#         deg_go =  deg_max_score[0] - planner.get_arm_deg()
-#         planner.move_single_cam(0, 0, 0, deg_go, config.default_speed)
-#         time.sleep(2)
-#         return True
-#     return False
+def pass_tree(tree_idx, state):
+    print ("pass across the tree")
+    lift_up(state)
+    # lift up
+    planner.add(planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, config.workspace_y, config.default_spd[1], 0])
+    # move base
+    planner.add(planner.SET_POSITION, [config.BASE_MOTOR_ID_L, config.tree_position[tree_idx], config.default_spd[2], 0])
+    # lift down
+    planner.add(planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_start, config.default_spd[1], 0])
 
-def turn_arm_drop_mango(color = 1):
-    if color not in [1, 2]:
-        color = 1
-    
-    cur_pos = planner.get_pos()
-    planner.move_to_stereo_cam(config.workspace_x/2, cur_pos[1], cur_pos[2], config.default_speed)
-    if color == 1:
-        
-        planner.set_pulse(config.FORWARD_MOTOR_ID, 0, 500, 10000)
-        print('A2')
-        planner.set_pulse(config.TURRET_MOTOR_ID, 0, 500, 100)
-        print('A3')
-        planner.set_pulse(config.MIDDLE_MOTOR_ID, 4400000, 500, 10000)
-    else:
-        print('B1')
-        planner.set_pulse(config.FORWARD_MOTOR_ID, 0, 500, 10000)
-        print('B2')
-        planner.set_pulse(config.TURRET_MOTOR_ID, 4050, 500, 100)
-        print('B3')
-        planner.set_pulse(config.MIDDLE_MOTOR_ID, 800000, 500, 10000)
-    #drop_mango()
-                     
-    return True
+def left_to_right():
+    print ("turn arm from right to left but move kart from left to right")
+    lift_up(3)
+    # move kart
+    planner.add(planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0])
+    # lift down
+    planner.add(planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
 
-def drop_mango():
-    print('DROP')
-    # planner.drop_mango(True)
-    # time.sleep(1.5)
-    # planner.cut_mango(False)
-    # time.sleep(1.5)
-    # planner.drop_mango(False)
-    # time.sleep(1.5)
-    
-    return True
+def right_to_left():
+    print ("turn arm from left to right but move kart from right to left")
+    lift_up(1)
+    # move kart
+    planner.add(planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0])
+    # lift down
+    planner.add(planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
 
-def cut_mango():
-    # for i in range(config.cut_count):
-    #     planner.cut_mango(True)
-    #     time.sleep(1)
-        
-    #     if i+1 < config.cut_count:
-    #         planner.cut_mango(False)
-    #         time.sleep(1)
-    # planner.cut_mango(True)
-    
-    return True
+def drop_fruit(color):
+    print ("drop fruit")
+    # side = (planner.get_control().get_pos()[0] > config.workspace_x / 2)
+    lift_up()
+    # turn arm
+    planner.add(planner.SET_POSITION, [config.TURRET_MOTOR_ID, config.basket[color], config.default_spd[3], 0])
+    # move to drop
+    planner.add(planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.middle_position[color], config.default_spd[0], 0])
+
+    # servo
+
+    # lift down
+    planner.add(planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
+
+def s1(): # turn arm into qaudrant 1
+    planner.add(planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0])
+    planner.add(planner.SET_POSITION, [config.TURRET_MOTOR_ID, 62.1, config.default_spd[3], 0])
+
+def s2():
+    planner.add(planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0])
+    planner.add(planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180-62.1), config.default_spd[3], 0])
+
+def s3():
+    planner.add(planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0])
+    planner.add(planner.SET_POSITION, [config.TURRET_MOTOR_ID, -(180-62.1), config.default_spd[3], 0])
+
+def s4():
+    planner.add(planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0])
+    planner.add(planner.SET_POSITION, [config.TURRET_MOTOR_ID, -62.1, config.default_spd[3], 0])
+
+def s5():
+    # task a photo by using camera on arm
+    frame = cam_on_arm.read()
+    # find mango on image
+    # if have mango at least one
+    s5t1 = 0
+    if s5t1:
+    #   create visual servo
+        vs = VisualServo() # pass the cam
+    #   get result from vs
+        result = vs.start()
+        # move to drop fruit
+        if result:
+            drop_fruit(0)
+    #   do previous state again
+        return True
+
+    return False
+
+def main():
+    tree_idx = -1
+    quadrant = 0 # count by state - 5555
+    state = 1
+
+    print ("Start")
+    while tree_idx < 6:
+        if planner.is_empty() and not planner.get_control().is_moving():
+            print ("state:", state)
+            if state == 1:
+                if quadrant != state:
+                    tree_idx += 1
+                    if tree_idx >= 6: break
+                    pass_tree(tree_idx)
+                quadrant = 1
+                s1()
+                state = 5
+            elif state == 2:
+                if quadrant != state:
+                    left_to_right()
+                quadrant = 2
+                s2()
+                state = 5
+            elif state == 3:
+                if quadrant != state:
+                    tree_idx += 1
+                    if tree_idx >= 6: break
+                    pass_tree(tree_idx) 
+                quadrant = 3
+                s3()
+                state = 5
+            elif state == 4:
+                if quadrant != state:
+                    right_to_left()
+                quadrant = 4 
+                s4()
+                state = 5
+            elif state == 5:
+                if not s5():
+                    state = ((quadrant + 1) % 4) + 1
+        else:
+            print ("wait ...")
+
+        time.sleep(0.5)
+
+    print ("Finish")
 
 if __name__ == '__main__':
-    detection_graph, tensor_dict, image_tensor, category_index = mango_model    
-    current_pos = [0, 0, 0]
-    mango_color = -1
-    
-    count_j = 10 # x
-    count_i = 10 # y
-    
-    view_x = config.workspace_x / count_j
-    view_y = config.workspace_y / count_i
-    
-    with detection_graph.as_default():
-        with tf.Session() as sess:
-            camera['device'].start()
-            for index, item in enumerate(base_position):
-                # planner.set_pulse(config.LIFT_MOTOR_ID_L, item[1] * config.encoder_pulse_lift_l, 2)
-                # planner.set_pulse(config.LIFT_MOTOR_ID_R, item[1] * config.encoder_pulse_lift_l, 2, 300)
-                # planner.set_pulse(config.BASE_MOTOR_ID_L, item[0] * config.encoder_pulse_base_l, 4)
-                # planner.set_pulse(config.BASE_MOTOR_ID_R, item[0] * config.encoder_pulse_base_l, 4, 400)
-                    
-                for i in range(2, count_i - 2):
-                    for j in range(2, count_j - 1):
-                        print('Coord',i,j)
-                        state = 0
-                        # planner.set_pulse(config.BASE_MOTOR_ID_L, item[0] * config.encoder_pulse_base_l, 4)
-                        # planner.set_pulse(config.BASE_MOTOR_ID_R, item[0] * config.encoder_pulse_base_l, 4, 400)
-                        planner.set_pulse(config.FORWARD_MOTOR_ID, 0, 500, 10000)
-                        planner.set_pulse(config.TURRET_MOTOR_ID, 2000, 500, 100)
-                        while True:
-                            print(state)
-                            if state == 0:
-                                x = (view_x / 2) + (view_x * j)
-                                if i % 2 == 1:
-                                    x = config.workspace_x - x
-                                y = ((view_y / 2) + (view_y * i))
-                                print ("POs x, y: ", x, y)
-                                planner.set_pulse(config.MIDDLE_MOTOR_ID, x * config.encoder_pulse_middle, 1000)
-                                planner.set_pulse(config.LIFT_MOTOR_ID_L, y * config.encoder_pulse_lift_l, 2)
-                                planner.set_pulse(config.LIFT_MOTOR_ID_R, y * config.encoder_pulse_lift_l, 2, 300)
-                                planner.set_pulse(config.MIDDLE_MOTOR_ID, x * config.encoder_pulse_middle, 1000, 1000)
-                                state = 1
-                                
-                            elif state == 1:
-                                frame = camera['device'].read()
-                                if not frame[0]:
-                                    print ("Camera Fail")
-                                    continue
-                                result = mod.detect(frame[1], mango_model[1:], sess, 0.9)
-                                if 'center' in result.keys():
-                                    state = 2
-                                else:
-                                    print ("Not Found Mango")
-                                    break
-                            elif state == 2:
-                                mango_color = -1
-                                if 1: # state_find_deg_maxscore(sess, mango_model[1:], camera):
-                                    vs = visual_servo.VisualServo(True)
-                                    vs.set_detector(sess, mango_model)
-                                    vs.set_camera(camera['device'])
-                                    try:
-                                        res = vs.start()
-                                        if not res:
-                                            break
-                                    finally:
-                                        vs.stop()
-                                    
-                                    mango_color = vs.get_color()
-                                    planner.move(0, 50, 0, config.default_speed) # test z
-                                    time.sleep(100 / config.default_speed)
-                                    planner.move(0, 0, 90, config.default_speed) # test z
-                                    time.sleep(70 / config.default_speed)
-                                    
-#                                     if planner.get_depth() > 500:
-#                                         state = 0
-                                    state = 3
-                            
-                            elif state == 3:
-                                cut_mango()
-                                state = 4
-                            
-                            elif state == 4:
-                                if turn_arm_drop_mango(mango_color):
-                                    state = 6
-                            
-                            elif state == 5:
-                                cur_pos = planner.get_pos()
-                                x_pos = config.middle_position[mango_color] - cur_pos[0]
-                                
-                                planner.move(x_pos, 0, 0, config.default_speed)
-                                
-                                if planner.is_moving():
-                                    state = 6
-                            
-                            elif state == 6:
-                                drop_mango()
-                                planner.set_pulse(config.TURRET_MOTOR_ID, 2000, 500, 100)
-                                state = 0
-                                
-                            elif state == 7:
-                                #planner.turn_to_arm(item[1])
-                                if np.abs(planner.get_arm_deg() - it) <= 2:
-                                    state = 1
-                            
-                            print (state)
-                
-    camera['device'].stop()
-    planner.stop()
-
+    main()

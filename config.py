@@ -38,7 +38,8 @@ _moving_threshold = {
 	FORWARD_MOTOR_ID: 17,
 }
 
-CAMERA_END_EFFECTOR = 'http://127.0.0.1:8082/stream.mjpg?w=1280&h=720'
+CAMERA_ON_ARM = 'http://127.0.0.1:8082/stream.mjpg?w=1280&h=720'
+CAMERA_END_EFFECTOR = 'http://127.0.0.1:8083/stream.mjpg?w=1280&h=720'
 camera_focus_length = 250
 
 SERVO_DOOR              = 0x03
