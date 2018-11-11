@@ -1,36 +1,23 @@
 import cv2
-import config
-import math
-import driver
-import datetime, time
-from motion_control import Planner
-from mango_detection import mango_detector as md
 import numpy as np
+import datetime, time
+
+from motion_control import Planner
+from mango_detection import yolo
+
+import config
 
 class VisualServo:
     """docstring for VisualServo"""
-    def __init__(self, show_image = False):
+    def __init__(self, net, cam, show_image = False):
         self.show_image = show_image
         self.color = -1
+
+        self.net = net
+        self.camera = cam
         
         self.tracker = None
         self.boxes = None
-        
-    def set_detector(self, session, model):
-        self.detector = {
-            'tf_session': session,
-            'model': model,
-        }
-
-    def set_camera(self, camera):
-        self.camera = camera
-
-#     def rorate_about_point(self, origin, point, deg): # dict of x, y, z | deg in radian
-#         x_diff = origin[0] - point[0]
-#         z_diff = origin[2] - point[2]
-#         return (origin[0] + (np.cos(deg) * x_diff - np.sin(deg) * z_diff),
-#                 origin[1],
-#                 origin[2] + (np.sin(deg) * x_diff + np.cos(deg) * z_diff))
 
     def ob_tracking(self, tracker_name):
         OPENCV_OBJECT_TRACKERS = {
@@ -59,13 +46,14 @@ class VisualServo:
         use_tracker = False
         result = None
         while self.__is_running and error_count < config.visual_failed_count:
-            depth = planner.get_depth()
-            if depth <= config.cut_length:
-                break
-            
-#             if planner.get_arm_length() > config.arm_max_workspace - 100:
-#                 break
+            if not planner.is_empty() and planner.is_moving():
+                time.sleep(0.5)
+                continue
 
+            # depth = planner.get_depth()
+            # if depth <= config.cut_length:
+            #     break
+            
             # move servo
             frame = self.camera.read()
             if not frame[0]:
@@ -80,11 +68,11 @@ class VisualServo:
             if self.tracker and self.boxes:
                 (use_tracker, box) = self.tracker.update(frame[1])
                 result['boxes'] = box
-                result['center'] = md.get_center(box)
+                result['center'] = yolo.get_center(box)
                 track_count += 1
             
             if not use_tracker:
-                result = md.detect(frame[1], self.detector['model'][1:], self.detector['tf_session'], 0.85, self.show_image)
+                result = yolo.detect(frame[1], self.net, 0.85, self.show_image)
                 self.tracker = None
                 
             if self.show_image:
@@ -119,7 +107,7 @@ class VisualServo:
             diff_z = min(diff_z, config.visual_max_move) * (zf / (zm + z_length_sum))
 #             diff_y=0
             planner.move(diff_x, diff_y, diff_z, 0, config.default_speed)
-            while planner.is_moving(): time.sleep(0.1)
+            # while planner.is_moving(): time.sleep(0.1)
             error_count = 0
         
             self.color = result['class']

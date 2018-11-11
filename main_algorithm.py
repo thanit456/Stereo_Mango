@@ -7,13 +7,14 @@ import math
 import time
 import numpy as np
 
-# detction
-# from mango_detection.yolo import yolo
-
 # visual servo
 from visual_servo import VisualServo
 from motion_control import Planner
 
+# detction
+import mango_detection.yolo as yolo
+
+net = yolo.load()
 cam_on_arm = driver.DriverCamera(config.CAMERA_ON_ARM)
 cam_end_arm = driver.DriverCamera(config.CAMERA_END_EFFECTOR)
 planner = Planner()
@@ -22,6 +23,8 @@ tree_position = [1000-1200, 1000+1200, 3000-1200, 3000+1200, 5000-1200, 5000+120
 y_pos_for_turn_arm = 1000
 y_pos_start = 500
 y_pos_before_turn = 0
+
+show_images = True
 
 def lift_up(state = 0):
     print ("lift up, state:", state)
@@ -93,11 +96,11 @@ def s5():
     # task a photo by using camera on arm
     frame = cam_on_arm.read()
     # find mango on image
+    result = yolo.detect(frame, net, 0.8, show_images)
     # if have mango at least one
-    s5t1 = 0
-    if s5t1:
+    if result != {}:
     #   create visual servo
-        vs = VisualServo() # pass the cam
+        vs = VisualServo(net, cam_end_arm) # pass the cam
     #   get result from vs
         result = vs.start()
         # move to drop fruit

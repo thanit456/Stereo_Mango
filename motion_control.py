@@ -96,7 +96,10 @@ class Planner:
         self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position]
 
     def is_empty(self):
-        return self.queue.empty():
+        return self.queue.empty()
+
+    def is_moving(self):
+        return self.control.is_moving()
 
     def get_control(self):
         return self.control
