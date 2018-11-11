@@ -10,7 +10,8 @@ def wait(con, t = 5):
         print (con)
         time.sleep(1)
 
-def main():
+def test_control():
+    print ("Test Control")
     con = Control.getInstance()
     
     # print (con)
@@ -31,6 +32,14 @@ def main():
     print (con)
 
     con.stop()
+
+def test_planner():
+    print ("Test Planner")
+
+def main():
+    test_control()
+    test_planner()
+    
 
 if __name__ == '__main__':    
     main()

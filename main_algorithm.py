@@ -156,4 +156,11 @@ def main():
     print ("Finish")
 
 if __name__ == '__main__':
-    main()
+    try:
+        cam_on_arm.start()
+        cam_end_arm.start()
+        main()
+    finally:
+        planner.stop()
+        cam_on_arm.stop()
+        cam_end_arm.stop()

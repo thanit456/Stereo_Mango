@@ -238,10 +238,10 @@ class Control:
         return False
 
     def get_pos(self):
-        return (self.position[0], self.position[1], self.position[2])
+        return np.array([self.position[0], self.position[1], self.position[2]], dtype=np.float64)
 
     def get_pos_arm(self):
-        return (self.position[5], self.position[1], self.position[6])
+        return np.array([self.position[5], self.position[1], self.position[6]], dtype=np.float64)
     
     # def get_depth(self):
     #     return self.depth
