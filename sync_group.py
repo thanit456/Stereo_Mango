@@ -4,6 +4,7 @@ import requests
 import datetime
 import config
 from pprint import pprint
+from driver import DriverMotor, DriverServo
 
 secret_key = b'Eic981234'
 group_id = 1
@@ -39,7 +40,10 @@ class Group:
         data = {"token": generate_otp()}
 
         for motor_id in self.list_driver.keys():
-            data[str(motor_id)] = ["cur_pos", "cur_velo"]
+            if isinstance(self.list_driver[motor_id], DriverMotor):
+                data[str(motor_id)] = ["cur_pos", "cur_velo"]
+            elif isinstance(self.list_driver[motor_id], DriverServo):
+                data[str(motor_id)] = ['ch{}_pos'.format(i) for i range(4)]
         
         tmp = None
         try:
@@ -49,8 +53,12 @@ class Group:
             return 
         
         for motor_id in self.list_driver.keys():
-            self.list_driver[motor_id].cur_pos = tmp[str(motor_id)]['cur_pos'] # pulse
-            self.list_driver[motor_id].cur_velo = tmp[str(motor_id)]['cur_velo'] # pulse / ms
+            if isinstance(self.list_driver[motor_id], DriverMotor):
+                self.list_driver[motor_id].cur_pos = tmp[str(motor_id)]['cur_pos'] # pulse
+                self.list_driver[motor_id].cur_velo = tmp[str(motor_id)]['cur_velo'] # pulse / ms
+            elif isinstance(self.list_driver[motor_id], DriverServo):
+                for i in range(4):
+                    self.list_driver[motor_id][i]['cur_pos'] = tmp[str(motor_id)]['ch{}_pos'.format(i)]
 
     def is_moving(self):
         # self.get()
@@ -75,12 +83,21 @@ class Group:
 
         motor = {}
         for motor_id in self.list_driver.keys():
-            motor[motor_id] = {
-                'mode': 1,
-                'enable' : self.list_driver[motor_id].en,
-                'goto_pos' : self.list_driver[motor_id].goto_pos,
-                'goto_velo' : self.list_driver[motor_id].goto_velo,
-            }
+            if isinstance(self.list_driver[motor_id], DriverMotor):
+                motor[motor_id] = {
+                    'mode': 1,
+                    'enable' : self.list_driver[motor_id].en,
+                    'goto_pos' : self.list_driver[motor_id].goto_pos,
+                    'goto_velo' : self.list_driver[motor_id].goto_velo,
+                }
+            elif isinstance(self.list_driver[motor_id], DriverServo):
+                servo = {}
+                for i, x in enumberate(self.list_driver[motor_id].servo):
+                    servo.update({
+                        'ch{}_enable'.format(i) : x['en'],
+                        'ch{}_pos'.format(i) : x['goal_pos'],
+                    })
+                motor[motor_id] = servo
         data.update(motor)
 
         result = None

@@ -8,13 +8,6 @@ import math
 
 import sync_group
 
-servo_template =  {
-    "en": 1,
-    'min_pos': 1000,
-    'max_pos': 2000,
-    'cur_pos': 1500,
-}
-
 secret_key = b'Eic981234'
 
 def generate_otp():
@@ -75,6 +68,8 @@ class Planner:
     PLANE_MOVE = 2
     SET_PULSE = 3
     SET_POSITION = 4
+    CUT = 5
+    DROP = 6
 
     @staticmethod
     def getInstance():
@@ -93,7 +88,7 @@ class Planner:
 
         self.queue = Queue(maxsize=max(queueSize, 32))
         self.control = Control()
-        self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position]
+        self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position, self.control.cut_mango, self.control.drop_mango]
 
     def is_empty(self):
         return self.queue.empty()
@@ -104,7 +99,7 @@ class Planner:
     def get_control(self):
         return self.control
 
-    def put(self, cmd, args):
+    def add(self, cmd, args):
         if not self.queue.full():
             return self.queue.put((cmd, tuple(args)))
         return False
@@ -118,7 +113,8 @@ class Planner:
     def loop(self):
         while self._is_running:
             block = self.queue.get()
-            self.cmd[block[0]](*block[1])
+            if block[0] < len(self.cmd):
+                self.cmd[block[0]](*block[1])
 
             while self.control.is_moving():
                 time.sleep(0.1)
@@ -165,24 +161,18 @@ class Control:
         self.motor[config.MIDDLE_MOTOR_ID] = driver.DriverMotor(config.MIDDLE_MOTOR_ID, ppmm=config.encoder_pulse_middle)
         self.motor[config.TURRET_MOTOR_ID] = driver.DriverMotor(config.TURRET_MOTOR_ID, ppmm=config.encoder_pulse_turret)
         self.motor[config.FORWARD_MOTOR_ID] = driver.DriverMotor(config.FORWARD_MOTOR_ID, ppmm=config.encoder_pulse_forward)
+
         self.motor_group1 = sync_group.Group('overall')
         for motor_id in self.motor.keys(): self.motor_group1.add_driver(self.motor[motor_id])
         for motor_id in self.motor.keys(): self.motor[motor_id].set_moving_threshould(config._moving_threshold[motor_id])
 
-        self.servo = {
-            config.SERVO_DOOR : dict(servo_template),
-            config.SERVO_CUTTER : dict(servo_template),
-        }
-        self.servo[config.SERVO_DOOR]['min_pos'] = config.servo_door_open
-        self.servo[config.SERVO_DOOR]['max_pos'] = config.servo_door_close
-        self.servo[config.SERVO_CUTTER]['min_pos'] = config.servo_cutter_cut
-        self.servo[config.SERVO_CUTTER]['max_pos'] = config.servo_cutter_open
+        self.motor[config.END_EFFECTOR_ID] = driver.DriverServo(config.END_EFFECTOR_ID)
+        self.motor_group1.add_driver(self.motor[config.END_EFFECTOR_ID])
 
         self.delay_time = datetime.datetime(1970,1,1)
-        # self.MOTOR_GROUP = config.MOTOR_GROUP
-
         self.is_update = False
         self.thread = None
+
         self.start()
         time.sleep(3)
 
@@ -212,17 +202,17 @@ class Control:
 
         self.set_all_position(pos, velo)
 
-    # def cut_mango(self, is_cut):
-    #     cutter = self.servo[config.SERVO_CUTTER]
+    def cut_mango(self, is_cut):
+        servo = self.motor[config.END_EFFECTOR_ID]
         
-    #     cutter['en'] = 1
-    #     cutter['cur_pos'] = cutter['min_pos'] if is_cut is True else cutter['max_pos']
+        servo.enable(1)
+        servo.set(config.SERVO_CUTTER, config.servo_cutter_cut if is_cut is True else config.servo_cutter_open)
 
-    # def drop_mango(self, is_drop):
-    #     door = self.servo[config.SERVO_DOOR]
-
-    #     door['en'] = 1
-    #     door['cur_pos'] = door['min_pos'] if is_drop is True else door['max_pos']
+    def drop_mango(self, is_drop):
+        servo = self.motor[config.END_EFFECTOR_ID]
+        
+        servo.enable(1)
+        servo.set(config.SERVO_DOOR, config.servo_door_open if is_cut is True else config.servo_door_close)
     
     def stop_move(self):
         for i, item in enumerate(self.MOTOR_GROUP):
@@ -347,14 +337,6 @@ class Control:
     def _send_position(self):
         url = "{}/set".format(config.url)
         data = {"token": generate_otp()}
-
-        # servo = {}
-        # for servo_id in self.servo.keys():
-        #     servo.update({
-        #         'ch{}_enable'.format(servo_id) : self.servo[servo_id]['en'],
-        #         'ch{}_pos'.format(servo_id) : self.servo[servo_id]['cur_pos'],
-        #     })
-        # data[config.END_EFFECTOR_ID] = servo
 
         result = None
         self.motor_group1.send()
