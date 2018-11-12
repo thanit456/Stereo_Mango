@@ -15,8 +15,8 @@ from motion_control import Planner
 import mango_detection.yolo as yolo
 
 net = yolo.load()
-cam_on_arm = driver.DriverCamera(config.CAMERA_ON_ARM)
-cam_end_arm = driver.DriverCamera(config.CAMERA_END_EFFECTOR)
+# cam_on_arm = driver.DriverCamera(config.CAMERA_ON_ARM)
+# cam_end_arm = driver.DriverCamera(config.CAMERA_END_EFFECTOR)
 planner = Planner().getInstance()
 
 tree_position = [1000-1200, 1000+1200, 3000-1200, 3000+1200, 5000-1200, 5000+1200]
@@ -37,14 +37,14 @@ def lift_up(state = 0):
         deg = 0 if state in [2, 3] else 180
         planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, deg, config.default_spd[3], 0])
 
-def pass_tree(tree_idx, state = 0):
+def pass_tree(idx, state = 0):
     print ("pass across the tree")
     if state in [3]:
         lift_up(state)
         # lift up
         planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, config.workspace_y, config.default_spd[1], 0])
     # move base
-    planner.add(Planner.SET_POSITION, [config.BASE_MOTOR_ID_L, config.tree_position[tree_idx], config.default_spd[2], 0])
+    planner.add(Planner.SET_POSITION, [config.BASE_MOTOR_ID_L, tree_position[idx], config.default_spd[2], 0])
     # lift down
     planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_start, config.default_spd[1], 0])
 
@@ -126,17 +126,14 @@ def main():
     quadrant = 0 # count by state - 5555
     state = 1
 
-    def increase_idx():
-        tree_idx += 1
-        return (tree_idx >= len(tree_position))
-
     print ("Start")
     while tree_idx < 6:
         if planner.is_empty() and not planner.is_moving():
             print ("state:", state)
             if state == 1:
                 if quadrant != state:
-                    if increase_idx(): break
+                    tree_idx += 1
+                    if (tree_idx >= len(tree_position)): break
                     pass_tree(tree_idx)
                 quadrant = 1
                 s1()
@@ -149,7 +146,8 @@ def main():
                 state = 5
             elif state == 3:
                 if quadrant != state:
-                    if increase_idx(): break
+                    tree_idx += 1
+                    if (tree_idx >= len(tree_position)): break
                     pass_tree(tree_idx) 
                 quadrant = 3
                 s3()
@@ -172,12 +170,12 @@ def main():
 
 if __name__ == '__main__':
     try:
-        cam_on_arm.start()
-        cam_end_arm.start()
+        # cam_on_arm.start()
+        # cam_end_arm.start()
         main()
     except Exception as e:
         print ("Error in main:", e)
-    finally:
-        planner.stop()
-        cam_on_arm.stop()
-        cam_end_arm.stop()
+
+    planner.stop()
+    # cam_on_arm.stop()
+    # cam_end_arm.stop()

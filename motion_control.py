@@ -90,6 +90,9 @@ class Planner:
         self.control = Control()
         self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position, self.control.cut_mango, self.control.drop_mango]
 
+        self.thread = None
+        self.start()
+
     def is_empty(self):
         return self.queue.empty()
 
@@ -267,10 +270,10 @@ class Control:
                     self.motor[id].enable(1)
                     if i == 3:
                         pos = pulse * self.motor[motor_id].ppmm
-                        self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position), velo[i], False)
+                        self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position), velo, False)
                     else:
                         self.motor[id].set_goal(pulse * self.motor[motor_id].ppmm, velo, False)
-        if wait:
+        if error_wait:
             while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
                 time.sleep(0.5)
         self.is_update = False
@@ -288,10 +291,10 @@ class Control:
                     self.motor[id].enable(1)
                     if i == 3:
                         pos = pulse / self.motor[motor_id].ppmm
-                        self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position), velo[i], False)
+                        self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position), velo, False)
                     else:
                         self.motor[id].set_goal(pulse, velo, True)
-        if wait:
+        if error_wait:
             while abs(self.motor[motor_id].get_curr()[0] * self.motor[motor_id].ppmm - pulse) >= error_wait:
                 time.sleep(0.5)
         self.is_update = False
