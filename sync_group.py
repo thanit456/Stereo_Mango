@@ -43,7 +43,7 @@ class Group:
             if isinstance(self.list_driver[motor_id], DriverMotor):
                 data[str(motor_id)] = ["cur_pos", "cur_velo"]
             elif isinstance(self.list_driver[motor_id], DriverServo):
-                data[str(motor_id)] = ['ch{}_pos'.format(i) for i range(4)]
+                data[str(motor_id)] = ['ch{}_pos'.format(i) for i in range(4)]
         
         tmp = None
         try:
@@ -57,6 +57,7 @@ class Group:
                 self.list_driver[motor_id].cur_pos = tmp[str(motor_id)]['cur_pos'] # pulse
                 self.list_driver[motor_id].cur_velo = tmp[str(motor_id)]['cur_velo'] # pulse / ms
             elif isinstance(self.list_driver[motor_id], DriverServo):
+                pprint (tmp)
                 for i in range(4):
                     self.list_driver[motor_id][i]['cur_pos'] = tmp[str(motor_id)]['ch{}_pos'.format(i)]
 
@@ -69,13 +70,14 @@ class Group:
 
     def update(self):
         for i in self.list_driver.keys():
-            self.list_driver[i].goto_velo = self.list_driver[i].goal_velo
+            if isinstance(self.list_driver[i], DriverMotor):
+                self.list_driver[i].goto_velo = self.list_driver[i].goal_velo
 
-            length = self.list_driver[i].goal_pos - self.list_driver[i].cur_pos
-            length2 = self.list_driver[i].goal_velo * config.planner_update_time * 1000
-            length = max(min(length, length2), -length2)
-            self.list_driver[i].goto_pos = int(self.list_driver[i].cur_pos + length)
-#                     pprint.pprint (self.motor['forward'])
+                length = self.list_driver[i].goal_pos - self.list_driver[i].cur_pos
+                length2 = self.list_driver[i].goal_velo * config.planner_update_time * 1000
+                length = max(min(length, length2), -length2)
+                self.list_driver[i].goto_pos = int(self.list_driver[i].cur_pos + length)
+    #                     pprint.pprint (self.motor['forward'])
 
     def send(self):
         url = "{}/set".format(config.url)

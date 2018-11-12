@@ -161,8 +161,8 @@ def main():
                 s4()
                 state = 5
             elif state == 5:
-                if not s5():
-                    state = ((quadrant + 1) % 4) + 1
+                # if not s5():
+                state = ((quadrant + 1) % 4) + 1
         else:
             print ("wait ...")
 

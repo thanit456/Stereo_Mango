@@ -166,8 +166,8 @@ class Control:
         for motor_id in self.motor.keys(): self.motor_group1.add_driver(self.motor[motor_id])
         for motor_id in self.motor.keys(): self.motor[motor_id].set_moving_threshould(config._moving_threshold[motor_id])
 
-        self.motor[config.END_EFFECTOR_ID] = driver.DriverServo(config.END_EFFECTOR_ID)
-        self.motor_group1.add_driver(self.motor[config.END_EFFECTOR_ID])
+        # self.motor[config.END_EFFECTOR_ID] = driver.DriverServo(config.END_EFFECTOR_ID)
+        # self.motor_group1.add_driver(self.motor[config.END_EFFECTOR_ID])
 
         self.delay_time = datetime.datetime(1970,1,1)
         self.is_update = False
@@ -301,12 +301,6 @@ class Control:
 
         url = "{}/get".format(config.url)
         data = {"token": generate_otp()}
-
-        # servo = []
-        # for servo_id in self.servo.keys():
-        #     servo.append('ch{}_pos'.format(servo_id))
-        # servo.append('range')
-        # data[str(config.END_EFFECTOR_ID)] = servo
         
         self.motor_group1.get()
         tmp = None
