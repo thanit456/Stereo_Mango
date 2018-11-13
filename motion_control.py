@@ -52,7 +52,7 @@ def plan_turn(cur, goto):
 
     # print (cur, goto, c, d)
 
-    return cur + c if c >= d else cur - d
+    return cur + c if c < d else cur - d
 
 import sys
 if sys.version_info >= (3, 0):
@@ -128,8 +128,16 @@ class Planner:
         self.thread = None
         self.control.stop()
 
+    def __str__(self):
+        txt = ''
+        while not self.is_empty():
+            a = self.queue.get()
+            txt += str(a) + '\n'
+        return txt
+
 class Control:
     __instance = None
+    _en_servo = False
 
     @staticmethod
     def getInstance():
@@ -149,7 +157,6 @@ class Control:
 
         self.position = [0 for i in range(7)] # middle, lift, base, turret, forward
         self.velocity = [0 for i in range(7)] # middle, lift, base, turret, forward
-        self.depth = 0
         self.goal_pos = [0 for i in range(7)]
 
         self.position[3] += config.arm_start_position
@@ -170,8 +177,9 @@ class Control:
         for motor_id in self.motor.keys(): self.motor_group1.add_driver(self.motor[motor_id])
         for motor_id in self.motor.keys(): self.motor[motor_id].set_moving_threshould(config._moving_threshold[motor_id])
 
-        # self.motor[config.END_EFFECTOR_ID] = driver.DriverServo(config.END_EFFECTOR_ID)
-        # self.motor_group1.add_driver(self.motor[config.END_EFFECTOR_ID])
+        if Control._en_servo:
+            self.motor[config.END_EFFECTOR_ID] = driver.DriverServo(config.END_EFFECTOR_ID)
+            self.motor_group1.add_driver(self.motor[config.END_EFFECTOR_ID])
 
         self.delay_time = datetime.datetime(1970,1,1)
         self.is_update = False
@@ -240,8 +248,8 @@ class Control:
     def get_pos_arm(self):
         return np.array([self.position[5], self.position[1], self.position[6]], dtype=np.float64)
     
-    # def get_depth(self):
-    #     return self.depth
+    def get_depth(self):
+        return self.servo.get_range() if Control._en_servo else 0
 
     def set_all_position(self, pos, velo): # x, y, z, deg, arm
         for i in range(len(config.MOTOR_GROUP)):
@@ -314,13 +322,6 @@ class Control:
         except Exception as e:
             print ("Motor Control", e)
             return 
-        
-        # for servo_id in self.servo.keys():
-        #     self.servo[servo_id]['cur_pos'] = tmp[str(config.END_EFFECTOR_ID)]['ch{}_pos'.format(servo_id)]
-
-        # self.depth = tmp[str(config.END_EFFECTOR_ID)]['range']
-        # if self.depth == 65535:
-        #     self.depth = 100
 
         for i in range(len(config.MOTOR_GROUP)):
             self.position[i], self.velocity[i] = self.motor[config.MOTOR_GROUP[i][0]].get_curr()

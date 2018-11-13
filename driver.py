@@ -239,6 +239,8 @@ class DriverServo:
         self.url = host
 
         self.servo = [dict(DriverServo.servo_template) for i in range(4)]
+        self.range_finder = 0
+
         self.sync_group = None
         self.group_id = -1
 
@@ -248,6 +250,13 @@ class DriverServo:
 
     def get_id(self):
         return self.id
+
+    def get_range(self):
+        if self.group_id < 0:
+            a = self._post('get', ['range'])
+            self.range_finder = a['range'] if a < 65535 else 0
+
+        return self.range_finder
 
     def enable(self, idx, en):
         self.servo[idx]['en'] = en
@@ -271,7 +280,9 @@ class DriverServo:
 
     def get(self, idx):
         if group_id < 0:
-            self._post('get', ['ch{}_pos'.format(i) for i, x in enumberate(self.servo)])
+            a = self._post('get', ['ch{}_pos'.format(i) for i, x in enumberate(self.servo)])
+            for i, x in self.servo:
+                x['cur_pos'] = a['ch{}_pos'.format(i)]
 
         return self.servo[idx]['cur_pos']
 
