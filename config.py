@@ -26,16 +26,16 @@ encoder_pulse_middle    = (160 * 1024 * 4) / (8 * 20)
 encoder_pulse_turret    = (2000 * 4) / 360
 encoder_pulse_forward   = (160 * 1024 * 4) / (5 * 24)
 
-default_spd = [300, 2, 2, 2, 300]
+default_spd = [300, 2, 2, 2, 100]
 
 _moving_threshold = {
 	BASE_MOTOR_ID_L: 5,
 	BASE_MOTOR_ID_R: 5,
 	LIFT_MOTOR_ID_L: 5,
 	LIFT_MOTOR_ID_R: 5,
-	MIDDLE_MOTOR_ID: 17,
-	TURRET_MOTOR_ID: 3,
-	FORWARD_MOTOR_ID: 17,
+	MIDDLE_MOTOR_ID: 750,
+	TURRET_MOTOR_ID: 1,
+	FORWARD_MOTOR_ID: 250,
 }
 
 CAMERA_ON_ARM = 'http://127.0.0.1:8082/stream.mjpg?w=1280&h=720'

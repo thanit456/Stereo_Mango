@@ -19,8 +19,9 @@ net = yolo.load()
 # cam_end_arm = driver.DriverCamera(config.CAMERA_END_EFFECTOR)
 planner = Planner().getInstance()
 
-tree_position = [1000-1200, 1000+1200, 3000-1200, 3000+1200, 5000-1200, 5000+1200]
-y_pos_for_turn_arm = 1000
+tree_position = [300, 1200, 1700, 2200]
+# tree_position = [1000-1200, 1000+1200, 3000-1200, 3000+1200, 5000-1200, 5000+1200]
+y_pos_for_turn_arm = 50000 / config.encoder_pulse_lift_l
 y_pos_start = 500
 y_pos_before_turn = 0
 
@@ -34,7 +35,7 @@ def lift_up(state = 0):
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x / 2, config.default_spd[0], 0])
     # turn arm
     if state > 0:
-        deg = 0 if state in [2, 3] else 180
+        deg = 180 if state in [2, 3] else 0
         planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, deg, config.default_spd[3], 0])
 
 def pass_tree(idx, state = 0):
@@ -160,7 +161,7 @@ def main():
                 state = 5
             elif state == 5:
                 # if not s5():
-                state = ((quadrant + 1) % 4) + 1
+                state = (quadrant % 4) + 1
         else:
             print ("wait ...")
 

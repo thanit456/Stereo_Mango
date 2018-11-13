@@ -15,21 +15,21 @@ def test_control():
     con = Control.getInstance()
     
     # print (con)
-    con.move_to(0, 500, 1000)
+    con.set_position(config.BASE_MOTOR_ID_L, 0, config.default_spd[2], 0)
     wait(con)
     print (con)
 
-    con.move_to(500, 500, 1500)
-    wait(con)
-    print (con)
+    # con.move_to(500, 500, 1500)
+    # wait(con)
+    # print (con)
     
-    con.move_to(500, 500, 1000)
-    wait(con)
-    print (con)
+    # con.move_to(500, 500, 1000)
+    # wait(con)
+    # print (con)
     
-    con.move_to(1000, 500, 1000)
-    wait(con)
-    print (con)
+    # con.move_to(1000, 500, 1000)
+    # wait(con)
+    # print (con)
 
     con.stop()
 

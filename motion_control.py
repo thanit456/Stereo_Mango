@@ -52,7 +52,7 @@ def plan_turn(cur, goto):
 
     # print (cur, goto, c, d)
 
-    return cur + c if c < d else cur- d
+    return cur + c if c >= d else cur - d
 
 import sys
 if sys.version_info >= (3, 0):
@@ -119,8 +119,9 @@ class Planner:
             if block[0] < len(self.cmd):
                 self.cmd[block[0]](*block[1])
 
+            time.sleep(3)
             while self.control.is_moving():
-                time.sleep(0.1)
+                time.sleep(3)
 
     def stop(self):
         self._is_running = 0
@@ -269,10 +270,10 @@ class Control:
                 for id in config.MOTOR_GROUP[i]:
                     self.motor[id].enable(1)
                     if i == 3:
-                        pos = pulse * self.motor[motor_id].ppmm
-                        self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position), velo, False)
+                        pos = plan_turn(self.position[i] - config.arm_start_position, pulse - config.arm_start_position)
+                        self.motor[id].set_goal(pulse, velo, False)
                     else:
-                        self.motor[id].set_goal(pulse * self.motor[motor_id].ppmm, velo, False)
+                        self.motor[id].set_goal(pulse, velo, False)
         if error_wait:
             while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
                 time.sleep(0.5)
@@ -291,7 +292,8 @@ class Control:
                     self.motor[id].enable(1)
                     if i == 3:
                         pos = pulse / self.motor[motor_id].ppmm
-                        self.motor[id].set_goal(plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position), velo, False)
+                        # pos = plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position)
+                        self.motor[id].set_goal(pos, velo, False)
                     else:
                         self.motor[id].set_goal(pulse, velo, True)
         if error_wait:
