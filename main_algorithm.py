@@ -1,22 +1,22 @@
 #!/usr/bin/python3
 
-import cv2
-import config
-import driver
-import math
 import time
+import cv2
 import numpy as np
 
+import config
+# driver
+from Driver.camera import DriverCamera
+from Driver.stereo import DriverStereo
 # visual servo
 from visual_servo import VisualServo
 from motion_control import Planner
-
 # detction
 import mango_detection.yolo as yolo
 
 net = yolo.load('yolov3_4500.weights')
-# cam_on_arm = driver.DriverCamera(config.CAMERA_ON_ARM)
-# cam_end_arm = driver.DriverCamera(config.CAMERA_END_EFFECTOR)
+# cam_on_arm = DriverCamera(config.CAMERA_ON_ARM)
+# cam_end_arm = DriverStereo(config.CAMERA_END_EFFECTOR)
 planner = Planner().getInstance()
 
 tree_position = [300, 1200, 1700, 2200]

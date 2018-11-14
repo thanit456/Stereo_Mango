@@ -1,21 +1,12 @@
-import driver
-import config
-import time, hashlib, datetime, requests
+import pprint
+
 import numpy as np
 from threading import Thread, Lock
-import pprint
-import math
 
+from Driver.motor import DriverMotor, DriverServo
+
+import config
 import sync_group
-
-secret_key = b'Eic981234'
-
-def generate_otp():
-    timestamp = int(time.time()*1000)
-    timestamp = str(timestamp)
-    h = hashlib.sha256()
-    h.update(timestamp.encode() + secret_key)
-    return h.digest()[:8].hex()+timestamp
 
 def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
     ck = 1
@@ -168,20 +159,20 @@ class Control:
         self.goal_pos[4] += config.arm_min_workspace
 
         self.motor = {}
-        self.motor[config.BASE_MOTOR_ID_L] = driver.DriverMotor(config.BASE_MOTOR_ID_L, ppmm=config.encoder_pulse_base_l)
-        self.motor[config.BASE_MOTOR_ID_R] = driver.DriverMotor(config.BASE_MOTOR_ID_R, ppmm=config.encoder_pulse_base_r)
-        self.motor[config.LIFT_MOTOR_ID_L] = driver.DriverMotor(config.LIFT_MOTOR_ID_L, ppmm=config.encoder_pulse_lift_l)
-        self.motor[config.LIFT_MOTOR_ID_R] = driver.DriverMotor(config.LIFT_MOTOR_ID_R, ppmm=config.encoder_pulse_lift_r)
-        self.motor[config.MIDDLE_MOTOR_ID] = driver.DriverMotor(config.MIDDLE_MOTOR_ID, ppmm=config.encoder_pulse_middle)
-        self.motor[config.TURRET_MOTOR_ID] = driver.DriverMotor(config.TURRET_MOTOR_ID, ppmm=config.encoder_pulse_turret)
-        self.motor[config.FORWARD_MOTOR_ID] = driver.DriverMotor(config.FORWARD_MOTOR_ID, ppmm=config.encoder_pulse_forward)
+        self.motor[config.BASE_MOTOR_ID_L] = DriverMotor(config.BASE_MOTOR_ID_L, ppmm=config.encoder_pulse_base_l)
+        self.motor[config.BASE_MOTOR_ID_R] = DriverMotor(config.BASE_MOTOR_ID_R, ppmm=config.encoder_pulse_base_r)
+        self.motor[config.LIFT_MOTOR_ID_L] = DriverMotor(config.LIFT_MOTOR_ID_L, ppmm=config.encoder_pulse_lift_l)
+        self.motor[config.LIFT_MOTOR_ID_R] = DriverMotor(config.LIFT_MOTOR_ID_R, ppmm=config.encoder_pulse_lift_r)
+        self.motor[config.MIDDLE_MOTOR_ID] = DriverMotor(config.MIDDLE_MOTOR_ID, ppmm=config.encoder_pulse_middle)
+        self.motor[config.TURRET_MOTOR_ID] = DriverMotor(config.TURRET_MOTOR_ID, ppmm=config.encoder_pulse_turret)
+        self.motor[config.FORWARD_MOTOR_ID] = DriverMotor(config.FORWARD_MOTOR_ID, ppmm=config.encoder_pulse_forward)
 
         self.motor_group1 = sync_group.Group('overall')
         for motor_id in self.motor.keys(): self.motor_group1.add_driver(self.motor[motor_id])
         for motor_id in self.motor.keys(): self.motor[motor_id].set_moving_threshould(config._moving_threshold[motor_id])
 
         if Control._en_servo:
-            self.motor[config.END_EFFECTOR_ID] = driver.DriverServo(config.END_EFFECTOR_ID)
+            self.motor[config.END_EFFECTOR_ID] = DriverServo(config.END_EFFECTOR_ID)
             self.motor_group1.add_driver(self.motor[config.END_EFFECTOR_ID])
 
         self.delay_time = datetime.datetime(1970,1,1)

@@ -38,9 +38,14 @@ _moving_threshold = {
 	FORWARD_MOTOR_ID: 250,
 }
 
+# Camera
 CAMERA_ON_ARM = 'http://127.0.0.1:8082/stream.mjpg?w=1280&h=720'
 CAMERA_END_EFFECTOR = 'http://127.0.0.1:8083/stream.mjpg?w=1280&h=720'
 camera_focus_length = 250
+
+# Stero Camera //OmniVision_OV9750
+CAMERA_SENSOR_SIZE_WIDTH = 4860 * 1e-6
+CAMERA_SENSOR_SIZE_HEIGHT = 3660 * 1e-6
 
 SERVO_DOOR              = 0x03
 SERVO_CUTTER            = 0x01
