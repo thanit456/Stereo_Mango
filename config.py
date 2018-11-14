@@ -94,7 +94,8 @@ visual_failed_count = 10  # tune
 object_tracker = 'kcf' # csrt, boosting, mil, tld, mediainflow, mosse
 object_track_count = 10
 
-camera_K_offset_x = 30 # pixel
+end_cam_offset = np.array([0, 0], dtype=np.float64) # x, y
+arm_cam_offset = np.array([0, 0], dtype=np.float64) # x, y
 
 # section state move turret for find max score
 deg_find_score = 0.5# deg  # tunev

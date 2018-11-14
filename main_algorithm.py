@@ -14,7 +14,7 @@ from motion_control import Planner
 # detction
 import mango_detection.yolo as yolo
 
-net = yolo.load()
+net = yolo.load('yolov3_4500.weights')
 # cam_on_arm = driver.DriverCamera(config.CAMERA_ON_ARM)
 # cam_end_arm = driver.DriverCamera(config.CAMERA_END_EFFECTOR)
 planner = Planner().getInstance()
@@ -29,9 +29,9 @@ show_images = True
 
 def lift_up(state = 0):
     print ("lift up, state:", state)
-    planner.add(Planner.SET_POSITION, [config.FORWARD_MOTOR_ID, 0, config.default_spd[4], 0])
+    planner.add(Planner.SET_POSITION, [config.FORWARD_MOTOR_ID, 0, config.default_spd[4], 0], False)
     # lift up
-    planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_for_turn_arm, config.default_spd[1], 0])
+    planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_for_turn_arm, config.default_spd[1], 0], False)
     # move kart
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x / 2, config.default_spd[0], 0])
     # turn arm
@@ -54,7 +54,7 @@ def left_to_right():
     print ("turn arm from right to left but move kart from left to right")
     lift_up(3)
     # move kart
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0])
+    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0], False)
     # lift down
     planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
 
@@ -62,7 +62,7 @@ def right_to_left():
     print ("turn arm from left to right but move kart from right to left")
     lift_up(1)
     # move kart
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0])
+    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0], False)
     # lift down
     planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
 
@@ -75,7 +75,7 @@ def drop_fruit(color, state):
     # side = (planner.get_control().get_pos()[0] > config.workspace_x / 2)
     lift_up()
     # turn arm
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, config.basket[color], config.default_spd[3], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, config.basket[color], config.default_spd[3], 0], False)
     # move to drop
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.middle_position[color], config.default_spd[0], 0])
 
@@ -90,19 +90,19 @@ def drop_fruit(color, state):
 
 def s1(): # turn arm into qaudrant 3th
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0])
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 62.1, config.default_spd[3], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 62.1, config.default_spd[3], 0], False)
 
 def s2(): # turn arm into qaudrant 4th
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0])
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180-62.1), config.default_spd[3], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180-62.1), config.default_spd[3], 0], False)
 
 def s3(): # turn arm into qaudrant 1st
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0])
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180+62.1), config.default_spd[3], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180+62.1), config.default_spd[3], 0], False)
 
 def s4(): # turn arm into qaudrant 2nd
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0])
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, -62.1, config.default_spd[3], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, -62.1, config.default_spd[3], 0], False)
 
 def s5():
     # task a photo by using camera on arm
@@ -111,15 +111,15 @@ def s5():
     result = yolo.detect(frame, net, 0.8, show_images, "MainControl")
     # if have mango at least one
     if result != {}:
-    #   create visual servo
+        # create visual servo
         vs = VisualServo(net, cam_end_arm) # pass the cam
-    #   get result from vs
+        # get result from vs
         result = vs.start()
         # move to drop fruit
         if result:
             y_pos_before_turn = planner.get_control().get_pos()[1]
             drop_fruit(vs.get_color())
-    #   do previous state again
+        # do previous state again
         return True
 
     return False

@@ -102,9 +102,9 @@ class Planner:
     def get_control(self):
         return self.control
 
-    def add(self, cmd, args):
+    def add(self, cmd, args, wait = 1):
         if not self.queue.full():
-            return self.queue.put((cmd, tuple(args)))
+            return self.queue.put((cmd, tuple(args), wait))
         return False
 
     def start(self):
@@ -119,9 +119,12 @@ class Planner:
             if block[0] < len(self.cmd):
                 self.cmd[block[0]](*block[1])
 
-            time.sleep(3)
-            while self.control.is_moving():
-                time.sleep(3)
+            if block[2]:
+                start = datetime.datetime.now()
+                while not self.control.is_moving() and (datetime.datetime.now() - start).seconds < 1.1:
+                    time.sleep(0.1)
+                while self.control.is_moving():
+                    time.sleep(0.1)
 
     def stop(self):
         self._is_running = 0
