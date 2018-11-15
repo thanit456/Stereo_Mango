@@ -4,7 +4,7 @@ import requests
 import datetime
 import config
 from pprint import pprint
-from driver import DriverMotor, DriverServo
+from Driver.motor import DriverMotor, DriverServo
 
 secret_key = b'Eic981234'
 group_id = 1

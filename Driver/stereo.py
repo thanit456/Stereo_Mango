@@ -59,6 +59,9 @@ class DriverStereo:
     def stop(self):
         self.stopped = True
 
+    def get_depth(self, diparity = 0):
+        return 94558 / diparity - 196.78
+
     @staticmethod
     def find_lower_mean_r(imgl, imgr, rect_base_l):
         x, y, w, h = rect_base_l
