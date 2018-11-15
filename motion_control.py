@@ -14,8 +14,14 @@ def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
         dif_pos = end_pos - middle_pos
         length = np.linalg.norm(dif_pos)
 
+        if dif_pos[1] > control.arm_max_workspace:
+            return [0, 0, 0, 0]
+        
         radius = config.arm_min_workspace if length > config.arm_max_workspace else length
-        rad = np.arctan(dif_pos[1] / dif_pos[0]) - np.pi if dif_pos[0] != 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
+        rad = np.arcsin(dif_pos[1] / radius)
+        rad += 0 if dif_pos[0] >= 0 else np.pi / 2
+        # rad = np.arctan(dif_pos[1] / dif_pos[0]) if dif_pos[0] != 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
+
         x = end_pos[0] - radius * np.cos(rad) # middle
         z = end_pos[1] - radius * np.sin(rad) # middle
 
@@ -202,11 +208,16 @@ class Control:
         end_pos = np.array([x_pos, z_pos], dtype=np.float64)
         middle_pos = np.array([self.position[0], self.position[2]], dtype=np.float64)
 
-        x, z, rad, a = inverse_kinematics(middle_pos, end_pos)
+        klist = inverse_kinematics(middle_pos, end_pos)
+        if klist == [0, 0, 0, 0]:
+            return False
+
+        x, z, rad, a = klist
         velo = list(config.default_spd)
         pos = [x, y_pos, z, rad, a]
 
         self.set_all_position(pos, velo)
+        return True
 
     def cut_mango(self, is_cut):
         servo = self.motor[config.END_EFFECTOR_ID]
