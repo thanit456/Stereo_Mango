@@ -8,6 +8,7 @@ LIFT_MOTOR_ID_R     = 'elev_b'
 MIDDLE_MOTOR_ID     = 'middle'
 TURRET_MOTOR_ID     = 'turret'
 FORWARD_MOTOR_ID    = 'forward'
+END_EFFECTOR_ID     = 'endeff'
 
 MOTOR_GROUP = [
     (MIDDLE_MOTOR_ID, ),                    # x
@@ -41,19 +42,14 @@ _moving_threshold = {
 # Camera
 CAMERA_ON_ARM = 'http://127.0.0.1:8082/stream.mjpg?w=1280&h=720'
 CAMERA_END_EFFECTOR = 'http://127.0.0.1:8083/stream.mjpg?w=1280&h=720'
-camera_focus_length = 250
 
 # Stero Camera //OmniVision_OV9750
 CAMERA_SENSOR_SIZE_WIDTH = 4860 * 1e-6
 CAMERA_SENSOR_SIZE_HEIGHT = 3660 * 1e-6
+end_f_length    = 50
 
-SERVO_DOOR              = 0x03
 SERVO_CUTTER            = 0x01
-END_EFFECTOR_ID         = 'endeff'
-
 # Section servo position
-servo_door_close        = 1880
-servo_door_open         = 1150
 servo_cutter_cut        = 1000
 servo_cutter_open       = 1800
 
@@ -83,7 +79,6 @@ arm_forward_max_length = 543.640136719 # 555.17578125 # tune
 
 arm_min_workspace = arm_dist_from_joint_turret
 arm_max_workspace = arm_min_workspace + arm_forward_max_length
-
 
 offset_x_min = 0 - middle_position[0] + arm_min_workspace
 offset_x_max = arm_min_workspace - workspace_x + middle_position[1]

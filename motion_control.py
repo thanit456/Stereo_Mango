@@ -66,7 +66,6 @@ class Planner:
     SET_PULSE = 3
     SET_POSITION = 4
     CUT = 5
-    DROP = 6
 
     @staticmethod
     def getInstance():
@@ -85,7 +84,7 @@ class Planner:
 
         self.queue = Queue(maxsize=max(queueSize, 32))
         self.control = Control()
-        self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position, self.control.cut_mango, self.control.drop_mango]
+        self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position, self.control.cut_mango]
 
         self.thread = None
         self.start()
@@ -99,7 +98,7 @@ class Planner:
     def get_control(self):
         return self.control
 
-    def add(self, cmd, args, wait = 1):
+    def add(self, cmd, args, wait = True):
         if not self.queue.full():
             return self.queue.put((cmd, tuple(args), wait))
         return False
@@ -116,12 +115,12 @@ class Planner:
             if block[0] < len(self.cmd):
                 self.cmd[block[0]](*block[1])
 
-            if block[2]:
-                start = datetime.datetime.now()
-                while not self.control.is_moving() and (datetime.datetime.now() - start).seconds < 1.1:
-                    time.sleep(0.1)
-                while self.control.is_moving():
-                    time.sleep(0.1)
+                if block[2]:
+                    start = datetime.datetime.now()
+                    while not (self.control.is_moving() or (datetime.datetime.now() - start).seconds > 2.0):
+                        time.sleep(0.1)
+                    while self.control.is_moving():
+                        time.sleep(0.1)
 
     def stop(self):
         self._is_running = 0
@@ -224,12 +223,6 @@ class Control:
         
         servo.enable(1)
         servo.set(config.SERVO_CUTTER, config.servo_cutter_cut if is_cut is True else config.servo_cutter_open)
-
-    def drop_mango(self, is_drop):
-        servo = self.motor[config.END_EFFECTOR_ID]
-        
-        servo.enable(1)
-        servo.set(config.SERVO_DOOR, config.servo_door_open if is_cut is True else config.servo_door_close)
     
     def stop_move(self):
         for i, item in enumerate(self.MOTOR_GROUP):
@@ -276,17 +269,17 @@ class Control:
             ck = 0
             for id in config.MOTOR_GROUP[i]:
                 if id == motor_id:
-                    self.goal_pos[i] = pulse
                     ck = 1
                     break
             if ck:
                 for id in config.MOTOR_GROUP[i]:
                     self.motor[id].enable(1)
                     if i == 3:
-                        pos = plan_turn(self.position[i] - config.arm_start_position, pulse - config.arm_start_position)
-                        self.motor[id].set_goal(pulse, velo, False)
-                    else:
-                        self.motor[id].set_goal(pulse, velo, False)
+                        # pulse = plan_turn(self.position[i] - config.arm_start_position, pulse - config.arm_start_position)
+                        pass
+                    self.goal_pos[i] = pulse
+                    self.motor[id].set_goal(pulse, velo, False)
+                break
         if error_wait:
             while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
                 time.sleep(0.5)
@@ -297,18 +290,17 @@ class Control:
             ck = 0
             for id in config.MOTOR_GROUP[i]:
                 if id == motor_id:
-                    self.goal_pos[i] = pulse / self.motor[motor_id].ppmm
                     ck = 1
                     break
             if ck:
                 for id in config.MOTOR_GROUP[i]:
                     self.motor[id].enable(1)
                     if i == 3:
-                        pos = pulse / self.motor[motor_id].ppmm
-                        # pos = plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position)
-                        self.motor[id].set_goal(pos, velo, False)
-                    else:
-                        self.motor[id].set_goal(pulse, velo, True)
+                        pulse = pulse / self.motor[motor_id].ppmm
+                        # pulse = plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position)
+                    self.goal_pos[i] = pulse
+                    self.motor[id].set_goal(pulse, velo, True)
+                break
         if error_wait:
             while abs(self.motor[motor_id].get_curr()[0] * self.motor[motor_id].ppmm - pulse) >= error_wait:
                 time.sleep(0.5)

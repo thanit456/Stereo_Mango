@@ -36,8 +36,14 @@ def lift_up(state = 0):
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x / 2, config.default_spd[0], 0])
     # turn arm
     if state > 0:
-        deg = 180 if state in [2, 3] else 0
-        planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, deg, config.default_spd[3], 0])
+        if state in [2, 3]:
+            planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 180, config.default_spd[3], 0], False)
+            # move kart
+            planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0], False)
+        else:
+            planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 0, config.default_spd[3], 0], False)
+            # move kart
+            planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0], False)
 
 def pass_tree(idx, state = 0):
     print ("pass across the tree")
@@ -53,16 +59,12 @@ def pass_tree(idx, state = 0):
 def left_to_right():
     print ("turn arm from right to left but move kart from left to right")
     lift_up(3)
-    # move kart
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0], False)
     # lift down
     planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
 
 def right_to_left():
     print ("turn arm from left to right but move kart from right to left")
     lift_up(1)
-    # move kart
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0], False)
     # lift down
     planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
 
@@ -80,29 +82,31 @@ def drop_fruit(color, state):
     planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.middle_position[color], config.default_spd[0], 0])
 
     # servo
-    planner.add(Planner.DROP, [True])
     planner.add(Planner.CUT, [False])
-    planner.add(Planner.DROP, [False])
-
-    lift_up(state)
-    # lift down
-    planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
 
 def s1(): # turn arm into qaudrant 3th
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0])
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 62.1, config.default_spd[3], 0], False)
+    lift_up(1)
+    # lift down
+    planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 62.1, config.default_spd[3], 0])
 
 def s2(): # turn arm into qaudrant 4th
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0])
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180-62.1), config.default_spd[3], 0], False)
+    lift_up(2)
+    # lift down
+    planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180-62.1), config.default_spd[3], 0])
 
 def s3(): # turn arm into qaudrant 1st
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, config.default_spd[0], 0])
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180+62.1), config.default_spd[3], 0], False)
+    lift_up(3)
+    # lift down
+    planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, (180+62.1), config.default_spd[3], 0])
 
 def s4(): # turn arm into qaudrant 2nd
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, config.default_spd[0], 0])
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, -62.1, config.default_spd[3], 0], False)
+    lift_up(4)
+    # lift down
+    planner.add(Planner.SET_POSITION, [config.LIFT_MOTOR_ID_L, y_pos_before_turn, config.default_spd[1], 0])
+    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, -62.1, config.default_spd[3], 0])
 
 def s5():
     # task a photo by using camera on arm

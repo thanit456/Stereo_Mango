@@ -104,19 +104,21 @@ class VisualServo:
                 cv2.imshow("Visual Servo", result['image'])
                 cv2.waitKey(1)
 
-            diff_x = result['center'][0] - frame_center[0] # pixel
-            diff_y = frame_center[1] - result['center'][1] # pixel
             diff_z = self.camera.get_depth(disparity)
+            diff_y = (frame_center[1] - result['center'][1]) * diff_z / config.end_f_length
+            diff_x = (result['center'][0] - frame_center[0]) * diff_z / config.end_f_length
 
-            z_length_sum += diff_z
-            zm = 1000
-            zf = zm  + z_length_sum
+            # z_length_sum += diff_z
+            # zm = 1000
+            # zf = zm  + z_length_sum
             
-            diff_x = min(diff_x, config.visual_max_move) * (zf / (zm + z_length_sum)) * 2.5
-            diff_y = min(diff_y, config.visual_max_move) * (zf / (zm + z_length_sum))
-            diff_z = min(diff_z, config.visual_max_move) * (zf / (zm + z_length_sum))
-#             diff_y=0
-            planner.plane_move(diff_x, diff_y, diff_z, 0, config.default_speed)
+            # diff_x = min(diff_x, config.visual_max_move) * (zf / (zm + z_length_sum)) * 2.5
+            # diff_y = min(diff_y, config.visual_max_move) * (zf / (zm + z_length_sum))
+            # diff_z = min(diff_z, config.visual_max_move) * (zf / (zm + z_length_sum))
+
+            if not planner.plane_move(diff_x, diff_y, diff_z, 0, config.default_speed):
+                print ("out of range.")
+                return False
             # while planner.is_moving(): time.sleep(0.1)
             error_count = 0
         
