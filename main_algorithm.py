@@ -9,7 +9,7 @@ import config
 from Driver.camera import DriverCamera
 from Driver.stereo import DriverStereo
 # visual servo
-from visual_servo import VisualServo
+from visual_servo import VisualServo, AvoidMango
 from motion_control import Planner
 # detction
 import mango_detection.yolo as yolo
@@ -26,6 +26,7 @@ y_pos_start = 500
 y_pos_before_turn = 0
 
 show_images = True
+avoidMango = AvoidMango()
 
 def lift_up(state = 0):
     print ("lift up, state:", state)
@@ -116,7 +117,7 @@ def s5():
     # if have mango at least one
     if result != {}:
         # create visual servo
-        vs = VisualServo(net, cam_end_arm) # pass the cam
+        vs = VisualServo(net, cam_end_arm, avoidMango) # pass the cam
         # get result from vs
         result = vs.start()
         # move to drop fruit
@@ -144,6 +145,7 @@ def main():
                     tree_idx += 1
                     if (tree_idx >= len(tree_position)): break
                     pass_tree(tree_idx, 1)
+                    avoidMango.clear()
                 quadrant = 1
                 s1()
                 state = 5
@@ -151,6 +153,7 @@ def main():
                 if quadrant != state:
                     y_pos_before_turn = y_pos_start
                     left_to_right()
+                    avoidMango.clear()
                 quadrant = 2
                 s2()
                 state = 5
@@ -158,7 +161,8 @@ def main():
                 if quadrant != state:
                     tree_idx += 1
                     if (tree_idx >= len(tree_position)): break
-                    pass_tree(tree_idx, 3) 
+                    pass_tree(tree_idx, 3)
+                    avoidMango.clear() 
                 quadrant = 3
                 s3()
                 state = 5
@@ -166,6 +170,7 @@ def main():
                 if quadrant != state:
                     y_pos_before_turn = y_pos_start
                     right_to_left()
+                    avoidMango.clear()
                 quadrant = 4 
                 s4()
                 state = 5

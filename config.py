@@ -46,12 +46,21 @@ CAMERA_END_EFFECTOR = 'http://127.0.0.1:8083/stream.mjpg?w=1280&h=720'
 # Stero Camera //OmniVision_OV9750
 CAMERA_SENSOR_SIZE_WIDTH = 4860 * 1e-6
 CAMERA_SENSOR_SIZE_HEIGHT = 3660 * 1e-6
-end_f_length    = 50
+OV9750_PIXEL_SIZE_X = 3.75 * 1e-3 # mm
+OV9750_PIXEL_SIZE_Y = 3.75 * 1e-3 # mm
+
+CAMERA_MARIX_LEFT = np.array([[749.48103027, 0, 700.3758884], [0, 747.05263007, 490.55260203], [0, 0, 1]])
+CAMERA_MARIX_RIGHT = np.array([[750.09851697, 0, 679.89629617], [0, 748.27845873, 485.2441566], [0, 0, 1]])
+
+CAMERA_FOCAL_LEFT = [CAMERA_MARIX_LEFT[0][0] * OV9750_PIXEL_SIZE_X, CAMERA_MARIX_LEFT[1][1] * OV9750_PIXEL_SIZE_Y]
+CAMERA_FOCAL_RIGHT = [CAMERA_MARIX_RIGHT[0][0] * OV9750_PIXEL_SIZE_X, CAMERA_MARIX_RIGHT[1][1] * OV9750_PIXEL_SIZE_Y]
+position_cam_from_end = -120
+
 
 SERVO_CUTTER            = 0x01
 # Section servo position
 servo_cutter_cut        = 1000
-servo_cutter_open       = 1800
+servo_cutter_open       = 2000
 
 basket = {
     0: 182.25,  # tune
@@ -74,8 +83,9 @@ workspace_arm_offset_x = 195.3125 # tune
 
 # Section arm configure
 arm_start_position = 0 # tune
-arm_dist_from_joint_turret = 840 # tune
+arm_dist_from_joint_turret = 580 # tune
 arm_forward_max_length = 543.640136719 # 555.17578125 # tune
+arm_all_length = 1090
 
 arm_min_workspace = arm_dist_from_joint_turret
 arm_max_workspace = arm_min_workspace + arm_forward_max_length
