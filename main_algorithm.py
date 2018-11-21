@@ -11,22 +11,56 @@ from Driver.stereo import DriverStereo
 # visual servo
 from visual_servo import VisualServo, AvoidMango
 from motion_control import Planner
+import motion_control as mc
 # detction
 import mango_detection.yolo as yolo
 
 net = yolo.load('yolov3_4500.weights')
-# cam_on_arm = DriverCamera(config.CAMERA_ON_ARM)
-# cam_end_arm = DriverStereo(config.CAMERA_END_EFFECTOR)
+cam_on_arm = DriverCamera(1)
+cam_end_arm = DriverStereo(2)
 planner = Planner().getInstance()
 
 tree_position = [300, 1200, 1700, 2200]
-# tree_position = [1000-1200, 1000+1200, 3000-1200, 3000+1200, 5000-1200, 5000+1200]
-y_pos_for_turn_arm = 50000 / config.encoder_pulse_lift_l
+y_pos_for_turn_arm = 40000 / config.encoder_pulse_lift_l
 y_pos_start = 500
 y_pos_before_turn = 0
 
 show_images = True
 avoidMango = AvoidMango()
+
+def turn_arm_to_drop(state = 0):
+    if state < 1: return
+    control = planner.get_control()
+    
+    planner.add(Planner.SET_POSITION, [config.FORWARD_MOTOR_ID, 0, 0], False)
+    
+    if state == 1:
+        planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 90, config.default_spd[3], 0])
+    elif state == 2:
+        planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 90, config.default_spd[3], 0])
+    elif state == 3:
+        planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, -90, config.default_spd[3], 0])
+    elif state == 4:
+        planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, 90, config.default_spd[3], 0])
+
+    if state in [1, 4]:
+        planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, 0, 0])
+    else:
+        planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.workspace_x, 0])
+
+    while not planner.is_empty() and planner.is_moving():
+        time.sleep(0.5)
+
+    mid_pos = control.get_pos()
+    end_pos = control.get_pos_arm()
+    tmp = np.array(end_pos)
+    for z in range(end_pos[2], mid_pos[2], 100):
+        tmp[2] = z
+        x, z, turret, forward = mc.inverse_kinematics(mid_pos, tmp)
+        planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, x, config.default_spd[0], 0], False)
+        planner.add(Planner.SET_POSITION, [config.FORWARD_MOTOR_ID, forward, config.default_spd[4], 0], False)
+        planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, turret, config.default_spd[3], 0])
+
 
 def lift_up(state = 0):
     print ("lift up, state:", state)
@@ -75,12 +109,14 @@ def drop_fruit(color, state):
     planner.add(Planner.CUT, [True])
 
     print ("drop fruit")
-    # side = (planner.get_control().get_pos()[0] > config.workspace_x / 2)
-    lift_up()
+    turn_arm_to_drop(state)
+    side = (state in [2, 3])
+    # lift_up()
     # turn arm
-    planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, config.basket[color], config.default_spd[3], 0], False)
+    # planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, config.drop_position[config.TURRET_MOTOR_ID][2 * side + color], config.default_spd[3], 0], False)
     # move to drop
-    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.middle_position[color], config.default_spd[0], 0])
+    planner.add(Planner.SET_POSITION, [config.MIDDLE_MOTOR_ID, config.drop_position[config.MIDDLE_MOTOR_ID][2 * side + color], config.default_spd[0], 0])
+    planner.add(Planner.SET_POSITION, [config.FORWARD_MOTOR_ID, config.drop_position[config.FORWARD_MOTOR_ID][2 * side + color], config.default_spd[0], 0])
 
     # servo
     planner.add(Planner.CUT, [False])
@@ -117,7 +153,9 @@ def s5():
     # if have mango at least one
     if result != {}:
         # create visual servo
+        cam_on_arm.stop()
         vs = VisualServo(net, cam_end_arm, avoidMango) # pass the cam
+        cam_on_arm.start()
         # get result from vs
         result = vs.start()
         # move to drop fruit
@@ -188,7 +226,7 @@ def main():
 
 if __name__ == '__main__':
     try:
-        # cam_on_arm.start()
+        cam_on_arm.start()
         # cam_end_arm.start()
         main()
     except Exception as e:

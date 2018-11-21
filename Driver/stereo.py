@@ -4,7 +4,7 @@ import cv2
 import imutils
 
 import sys
-from threading import Thread
+from threading import Thread, Lock
 # import the Queue class from Python 3
 if sys.version_info >= (3, 0):
     from queue import Queue
@@ -24,6 +24,7 @@ class DriverStereo:
         self.stopped = False
 
         self.vs = cv2.VideoCapture(id)
+        self.lock = Lock()
 
     def start(self):
         # start a thread to read frames from the file video stream
@@ -36,16 +37,20 @@ class DriverStereo:
         while True:
             # if the thread indicator variable is set, stop the
             # thread
-            if self.stopped:
-                return
+            with self.lock:
+                if self.stopped:
+                    return
  
             # otherwise, ensure the queue has room in it
             if not self.Q.full():
                 # read the next frame from the file
                 (grabbed, frame) = self.vs.read()
                 frame_height, frame_width, ch = frame.shape
-                left = frame[:, :frame_width/2]
-                right = frame[:, frame_width/2:]
+                right = frame[::-1, :int(frame_width/2)]
+                left = frame[::-1, int(frame_width/2):]
+
+                left = left[::, ::-1]
+                right = right[::, ::-1]
 
                 # add the frame to the queue
                 self.Q.put((grabbed, left, right))
@@ -57,10 +62,19 @@ class DriverStereo:
         return self.Q.get()
 
     def stop(self):
-        self.stopped = True
+        with self.lock:
+            self.stopped = True
 
     def get_depth(self, diparity = 0):
-        return 94558 / diparity - 196.78
+        if 123.0 < diparity:
+            return -2.2714 * diparity + 675.22
+        elif (97.0 < diparity <= 123.0) :
+            return -4.1764 * diparity + 908.14
+        elif (80.0 < diparity <= 97.0) :
+            return -5.9514 * diparity + 1079.2
+        else: # elif diparity <= 80.0:
+            return -8.3246 * diparity + 1275.6
+            # return 94558 / diparity - 196.78
 
     @staticmethod
     def find_lower_mean_r(imgl, imgr, rect_base_l):

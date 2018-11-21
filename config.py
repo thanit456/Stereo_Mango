@@ -27,14 +27,14 @@ encoder_pulse_middle    = (160 * 1024 * 4) / (8 * 20)
 encoder_pulse_turret    = (2000 * 4) / 360
 encoder_pulse_forward   = (160 * 1024 * 4) / (5 * 24)
 
-default_spd = [300, 2, 2, 2, 100]
+default_spd = [540, 2, 2, 2, 100]
 
 _moving_threshold = {
 	BASE_MOTOR_ID_L: 5,
 	BASE_MOTOR_ID_R: 5,
 	LIFT_MOTOR_ID_L: 5,
 	LIFT_MOTOR_ID_R: 5,
-	MIDDLE_MOTOR_ID: 750,
+	MIDDLE_MOTOR_ID: default_spd[0] * 2.5,
 	TURRET_MOTOR_ID: 1,
 	FORWARD_MOTOR_ID: 250,
 }
@@ -62,14 +62,24 @@ SERVO_CUTTER            = 0x01
 servo_cutter_cut        = 1000
 servo_cutter_open       = 2000
 
-basket = {
-    0: 182.25,  # tune
-    1: 0,  # tune
-} # deg
+# basket = {
+#     0: 182.25,  # tune
+#     1: 0,  # tune
+#     2: 0,
+#     3: 0,
+# } # deg
 
-middle_position = {
-    0: 195.3125, # mm, tune
-    1: 1074.21875, # mm, tune
+# middle_position = {
+#     0: 195.3125, # mm, tune
+#     1: 1074.21875, # mm, tune
+#     2: 0,
+#     3: 0,
+# }
+
+drop_position = {
+    MIDDLE_MOTOR_ID: [0, 24.4140625, 1232.91015625, 0],
+    TURRET_MOTOR_ID: [180, 180, 0, 0],
+    FORWARD_MOTOR_ID: [119.018554688, 0, 0, 109.86328125],
 }
 
 # Section api
@@ -79,19 +89,19 @@ url = "http://localhost:8080/api"
 workspace_z         = 15000 # tune
 workspace_y         = 1260 # tune
 workspace_x         = 1269.5 # tune
-workspace_arm_offset_x = 195.3125 # tune
+# workspace_arm_offset_x = 195.3125 # tune
 
 # Section arm configure
 arm_start_position = 0 # tune
 arm_dist_from_joint_turret = 580 # tune
 arm_forward_max_length = 543.640136719 # 555.17578125 # tune
-arm_all_length = 1090
+# arm_all_length = 1090
 
 arm_min_workspace = arm_dist_from_joint_turret
 arm_max_workspace = arm_min_workspace + arm_forward_max_length
 
-offset_x_min = 0 - middle_position[0] + arm_min_workspace
-offset_x_max = arm_min_workspace - workspace_x + middle_position[1]
+offset_x_min = 0 - (drop_position[MIDDLE_MOTOR_ID][0] + drop_position[FORWARD_MOTOR_ID][0]) + arm_min_workspace
+offset_x_max = arm_min_workspace - workspace_x + (drop_position[MIDDLE_MOTOR_ID][3] + drop_position[FORWARD_MOTOR_ID][3])
 
 # Section algorithm
 planner_update_time = 4 + 1.5 + 3.5 * (8 - 1) #ms
@@ -108,13 +118,13 @@ end_cam_offset = np.array([0, 0], dtype=np.float64) # x, y
 arm_cam_offset = np.array([0, 0], dtype=np.float64) # x, y
 
 # section state move turret for find max score
-deg_find_score = 0.5# deg  # tunev
+# deg_find_score = 0.5# deg  # tunev
 
 # section operate basket
-cut_count = 2
-cut_length = 120
+# cut_count = 2
+cut_length = 180
 
 # section general
-default_speed = 50 # mm/s  # not use in new control
-accept_move = 100 # mm  # tune
-moving_threshold = 20 # mm/ s  # tune
+# default_speed = 50 # mm/s  # not use in new control
+# accept_move = 100 # mm  # tune
+# moving_threshold = 20 # mm/ s  # tune

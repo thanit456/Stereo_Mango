@@ -98,9 +98,9 @@ class VisualServo:
                 time.sleep(0.5)
                 continue
 
-            # depth = planner.get_depth()
-            # if depth <= config.cut_length:
-            #     break
+            depth = planner.get_control().get_depth()
+            if depth <= config.cut_length:
+                break
 
             # get current position
             cur_pos = planner.get_control().get_pos_arm()
@@ -121,6 +121,8 @@ class VisualServo:
                 track_count += 1
             
             if not use_tracker:
+                cv2.imshow("Frame - 1", frame[1])
+                cv2.waitKey(1)
                 results = yolo.detect(frame[1], self.net, 0.85, self.show_image, get_list=True)
                 while 1:
                     (i, color) = yolo.find_max_scores(results[0], results[1], 0.85)
@@ -200,7 +202,6 @@ class VisualServo:
 
             #print ("boxes", result['boxes'], 'center', result['center'])
             print ("move distance x:{}, y:{}, z:{}, d:{}".format(diff_x, diff_y, diff_z, depth))
-        
         return True if error_count < config.visual_failed_count else False
 
     def start(self):
@@ -208,11 +209,15 @@ class VisualServo:
         return self.run()
 
     def run(self):
+        self.camera.start()
         res = self.loop()
+        self.camera.stop()
+
         self._is_running = False
         return res
 
     def stop(self):
         if self._is_running:
             cv2.destroyAllWindows()
+            self.camera.stop()
         self._is_running = False

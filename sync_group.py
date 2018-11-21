@@ -43,13 +43,15 @@ class Group:
             if isinstance(self.list_driver[motor_id], DriverMotor):
                 data[str(motor_id)] = ["cur_pos", "cur_velo"]
             elif isinstance(self.list_driver[motor_id], DriverServo):
-                data[str(motor_id)] = ['ch{}_pos'.format(i) for i in range(4)]
+                data[str(motor_id)] = ['ch{}_pos'.format(i+1) for i in range(4)]
+                data[str(motor_id)].append('range')
         
+        # pprint (data)
         tmp = None
         try:
             tmp = requests.post(url, json=data).json()
         except Exception as e:
-            print ("Motor Control", e)
+            print ('sync group id-{}'.format(self.idx), e)
             return 
         
         for motor_id in self.list_driver.keys():
@@ -57,15 +59,16 @@ class Group:
                 self.list_driver[motor_id].cur_pos = tmp[str(motor_id)]['cur_pos'] # pulse
                 self.list_driver[motor_id].cur_velo = tmp[str(motor_id)]['cur_velo'] # pulse / ms
             elif isinstance(self.list_driver[motor_id], DriverServo):
-                pprint (tmp)
+                # pprint (tmp)
                 for i in range(4):
-                    self.list_driver[motor_id][i]['cur_pos'] = tmp[str(motor_id)]['ch{}_pos'.format(i)]
-
+                    self.list_driver[motor_id].servo[i]['cur_pos'] = tmp[str(motor_id)]['ch{}_pos'.format(i+1)]
+                self.list_driver[motor_id].range_finder = tmp[str(motor_id)]['range']
     def is_moving(self):
         # self.get()
         for i in self.list_driver.keys():
-            if self.list_driver[i].is_moving():
-                return True
+            if isinstance(self.list_driver[i], DriverMotor):
+                if self.list_driver[i].is_moving():
+                    return True
         return False
 
     def update(self):
@@ -94,7 +97,7 @@ class Group:
                 }
             elif isinstance(self.list_driver[motor_id], DriverServo):
                 servo = {}
-                for i, x in enumberate(self.list_driver[motor_id].servo):
+                for i, x in enumerate(self.list_driver[motor_id].servo):
                     servo.update({
                         'ch{}_enable'.format(i) : x['en'],
                         'ch{}_pos'.format(i) : x['goal_pos'],

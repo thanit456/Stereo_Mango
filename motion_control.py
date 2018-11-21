@@ -1,6 +1,7 @@
 import pprint
 
 import numpy as np
+import datetime, time
 from threading import Thread, Lock
 
 from Driver.motor import DriverMotor, DriverServo
@@ -14,26 +15,27 @@ def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
         dif_pos = end_pos - middle_pos
         length = np.linalg.norm(dif_pos)
 
-        if dif_pos[1] > control.arm_max_workspace:
+        if dif_pos[1] > config.arm_max_workspace:
             return [0, 0, 0, 0]
         
-        radius = config.arm_min_workspace if length > config.arm_max_workspace else length
+        radius = config.arm_min_workspace if length > config.arm_max_workspace else max(length, config.arm_min_workspace)
         rad = np.arcsin(dif_pos[1] / radius)
-        rad += 0 if dif_pos[0] >= 0 else np.pi / 2
+        rad = rad if dif_pos[0] >= 0 else (np.pi / 2 - rad) + np.pi / 2
         # rad = np.arctan(dif_pos[1] / dif_pos[0]) if dif_pos[0] != 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
+        # print (dif_pos, np.sin(rad) * radius)
 
         x = end_pos[0] - radius * np.cos(rad) # middle
         z = end_pos[1] - radius * np.sin(rad) # middle
 
         x -= config.offset_x_min
-        if -1e-15 > x > -1e-1: x = 0
-        if -1e-15 > z > -1e-1: z = 0
+        if abs(x) < 1e-1: x = 0
+        if abs(z) < 1e-1: z = 0
         if (0 <= x <= config.workspace_x) and 0 <= z:
             ck = 0
             break
 
         x_new = x - max(0, min(config.workspace_x, x))
-        z_new = z - max(0, min(config.workspace_z, z))
+        z_new = 0 # z - max(0, min(config.workspace_z, z))
         middle_pos -= np.array([x_new, z_new], dtype=np.float64)
         # print (rad * 180 / np.pi, x, x_new, z_new, middle_pos, dif_pos)
 
@@ -81,7 +83,7 @@ class Planner:
         else:
             Planner.__instance = self
 
-
+        self.lock = Lock()
         self.queue = Queue(maxsize=max(queueSize, 32))
         self.control = Control()
         self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position, self.control.cut_mango]
@@ -110,20 +112,26 @@ class Planner:
             self.thread.start()
 
     def loop(self):
-        while self._is_running:
+        while True:
+            with self.lock:
+                if not self._is_running:
+                    return
+
             block = self.queue.get()
             if block[0] < len(self.cmd):
                 self.cmd[block[0]](*block[1])
 
                 if block[2]:
                     start = datetime.datetime.now()
-                    while not (self.control.is_moving() or (datetime.datetime.now() - start).seconds > 2.0):
+                    while not (self.control.is_moving() and (datetime.datetime.now() - start).seconds < 2.0):
                         time.sleep(0.1)
                     while self.control.is_moving():
                         time.sleep(0.1)
 
     def stop(self):
-        self._is_running = 0
+        with self.lock:
+            self._is_running = 0
+        
         self.thread = None
         self.control.stop()
 
@@ -136,7 +144,7 @@ class Planner:
 
 class Control:
     __instance = None
-    _en_servo = False
+    _en_servo = True
 
     @staticmethod
     def getInstance():
@@ -232,12 +240,13 @@ class Control:
     def is_moving(self): # 
         if not self.is_update: return True
 
-        if self.motor_group1.is_moving():
-            return True
+        # if self.motor_group1.is_moving():
+        #     return True
 
         for id in self.motor:
-            if self.motor[id].is_moving():
-                return True
+            if isinstance(self.motor[id], DriverMotor):
+                if self.motor[id].is_moving():
+                    return True
         return False
 
     def get_pos(self):
@@ -247,7 +256,7 @@ class Control:
         return np.array([self.position[5], self.position[1], self.position[6]], dtype=np.float64)
     
     def get_depth(self):
-        return self.servo.get_range() if Control._en_servo else 0
+        return self.motor[config.END_EFFECTOR_ID].get_range() if Control._en_servo else 0
 
     def set_all_position(self, pos, velo): # x, y, z, deg, arm
         for i in range(len(config.MOTOR_GROUP)):
@@ -275,8 +284,8 @@ class Control:
                 for id in config.MOTOR_GROUP[i]:
                     self.motor[id].enable(1)
                     if i == 3:
-                        # pulse = plan_turn(self.position[i] - config.arm_start_position, pulse - config.arm_start_position)
-                        pass
+                        pulse = plan_turn(self.position[i] - config.arm_start_position, pulse - config.arm_start_position)
+                        # pass
                     self.goal_pos[i] = pulse
                     self.motor[id].set_goal(pulse, velo, False)
                 break
@@ -297,7 +306,7 @@ class Control:
                     self.motor[id].enable(1)
                     if i == 3:
                         pulse = pulse / self.motor[motor_id].ppmm
-                        # pulse = plan_turn(self.position[i] - config.arm_start_position, pos - config.arm_start_position)
+                        pulse = plan_turn(self.position[i] - config.arm_start_position, pulse - config.arm_start_position)
                     self.goal_pos[i] = pulse
                     self.motor[id].set_goal(pulse, velo, True)
                 break
@@ -309,16 +318,7 @@ class Control:
     def _update(self):
         result = {}
 
-        url = "{}/get".format(config.url)
-        data = {"token": generate_otp()}
-        
         self.motor_group1.get()
-        tmp = None
-        try:
-            tmp = requests.post(url, json=data).json()
-        except Exception as e:
-            print ("Motor Control", e)
-            return 
 
         for i in range(len(config.MOTOR_GROUP)):
             self.position[i], self.velocity[i] = self.motor[config.MOTOR_GROUP[i][0]].get_curr()
@@ -330,25 +330,14 @@ class Control:
         self.position[6] = self.position[2] + self.position[4] * np.sin(self.position[3] * np.pi / 180) # arm z
 
         self.is_update = True
-
-    def _send_position(self):
-        url = "{}/set".format(config.url)
-        data = {"token": generate_otp()}
-
-        result = None
-        self.motor_group1.send()
-        try:
-            result = requests.post(url, json=data)
-            #pprint.pprint (data)
-        except Exception as e:
-            print ("Motor_Control", e)
-            return 
-        if (result.status_code != 200):
-            print ('HTTP Error: {}'.format(result.status_code))
     
     def loop(self):
         i = 0
-        while self._is_running:
+        while True:
+            with self.lock:
+                if not self._is_running:
+                    return
+
             time_diff = (datetime.datetime.now() - self.delay_time).microseconds / 1000
             if time_diff < config.planner_update_time: # ms
                 sleep_more = config.planner_update_time - time_diff
@@ -358,7 +347,7 @@ class Control:
                 self._update()
                 self.motor_group1.update()
             else:                
-                self._send_position()
+                self.motor_group1.send()
 
             self.delay_time = datetime.datetime.now()
             i = (i + 1) % 2
@@ -375,7 +364,8 @@ class Control:
         return self
 
     def stop(self):
-        self._is_running = False
+        with self.lock:
+            self._is_running = False
         self.thread = None
 
     def __str__(self):

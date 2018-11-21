@@ -38,14 +38,15 @@ class DriverCamera:
         self.thread = Thread(target=self.update, args=())
         self.thread.daemon = True
         self.thread.start()
+        self.stopped = False
 
     def update(self):
         # keep looping infinitely
-        while True:
+        while not self.stopped:
             # if the thread indicator variable is set, stop the
             # thread
-            if self.stopped:
-                return
+            # if self.stopped:
+            #     return
  
             # otherwise, ensure the queue has room in it
             if not self.Q.full():
@@ -65,6 +66,7 @@ class DriverCamera:
         return self.Q.get()
 
     def stop(self):
+        self.thread = None
         self.stopped = True
 
     # def calibrate(self, col = 6, row = 7, size = 25, count = 15, roi = 1):
