@@ -51,10 +51,22 @@ def test_ik(continues = 0):
             mid_pos[0] = x
             mid_pos[1] = z
 
+def move_plane():
+    control = Control.getInstance()
+    control.set_position(config.TURRET_MOTOR_ID, 90, config.default_spd[3], 0)
+    control.set_position(config.FORWARD_MOTOR_ID, 0, config.default_spd[4], 0)
+    time.sleep(5)
+    print (control.get_pos())
+    print (control.get_pos_arm())
+    control.plane_move(0, 0, 100, 0)
+    time.sleep(3)
+    control.stop()
+
 def main():
     # test_control()
     # test_planner()
-    test_ik()
+    # test_ik()
+    move_plane()
     
 
 if __name__ == '__main__':    

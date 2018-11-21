@@ -92,15 +92,15 @@ class Group:
                 motor[motor_id] = {
                     'mode': 1,
                     'enable' : self.list_driver[motor_id].en,
-                    'goto_pos' : self.list_driver[motor_id].goto_pos,
-                    'goto_velo' : self.list_driver[motor_id].goto_velo,
+                    'goto_pos' : int(self.list_driver[motor_id].goto_pos),
+                    'goto_velo' : int(self.list_driver[motor_id].goto_velo),
                 }
             elif isinstance(self.list_driver[motor_id], DriverServo):
                 servo = {}
                 for i, x in enumerate(self.list_driver[motor_id].servo):
                     servo.update({
                         'ch{}_enable'.format(i) : x['en'],
-                        'ch{}_pos'.format(i) : x['goal_pos'],
+                        'ch{}_pos'.format(i) : int(x['goal_pos']),
                     })
                 motor[motor_id] = servo
         data.update(motor)

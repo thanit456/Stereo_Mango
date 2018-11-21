@@ -24,6 +24,8 @@ class DriverCamera:
         self.stopped = False
 
         self.vs = cv2.VideoCapture(id)
+        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
         # self.obj_points = []
         # self.img_points = []

@@ -10,15 +10,18 @@ import config
 import sync_group
 
 def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
-    ck = 1
-    while ck:
+    # print (middle_pos, end_pos)
+    ck = 0
+    while True:
         dif_pos = end_pos - middle_pos
         length = np.linalg.norm(dif_pos)
+        # print ("Diff z", dif_pos[1])
 
-        if dif_pos[1] > config.arm_max_workspace:
+        if dif_pos[1] > config.arm_max_workspace or ck > 2:
             return [0, 0, 0, 0]
         
-        radius = config.arm_min_workspace if length > config.arm_max_workspace else max(length, config.arm_min_workspace)
+        # radius = max(dif_pos[1], config.arm_min_workspace) if length > config.arm_max_workspace else max(length, config.arm_min_workspace)
+        radius = max(length, config.arm_min_workspace)
         rad = np.arcsin(dif_pos[1] / radius)
         rad = rad if dif_pos[0] >= 0 else (np.pi / 2 - rad) + np.pi / 2
         # rad = np.arctan(dif_pos[1] / dif_pos[0]) if dif_pos[0] != 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
@@ -31,27 +34,31 @@ def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
         if abs(x) < 1e-1: x = 0
         if abs(z) < 1e-1: z = 0
         if (0 <= x <= config.workspace_x) and 0 <= z:
-            ck = 0
             break
 
         x_new = x - max(0, min(config.workspace_x, x))
         z_new = 0 # z - max(0, min(config.workspace_z, z))
         middle_pos -= np.array([x_new, z_new], dtype=np.float64)
+        ck += 1
         # print (rad * 180 / np.pi, x, x_new, z_new, middle_pos, dif_pos)
 
     return [x + config.offset_x_min, z, rad * 180 / np.pi, radius]
 
 def plan_turn(cur, goto):
     # [-360, 360]
-    a = ((cur % 360) + 360) % 360
+
+    # a = ((cur % 360) + 360) % 360
     b = ((goto % 360) + 360) % 360
 
-    c = ((goto - cur) + 360) % 360
-    d = ((cur - goto) + 360) % 360
+    # c = ((goto - cur) + 360) % 360
+    # d = ((cur - goto) + 360) % 360
 
-    # print (cur, goto, c, d)
+    if b > 180:
+        return (b - 360)
+    return b
+    # # print (cur, goto, c, d)
 
-    return cur + c if c < d else cur - d
+    # return cur + c if c < d else cur - d
 
 import sys
 if sys.version_info >= (3, 0):
@@ -112,28 +119,39 @@ class Planner:
             self.thread.start()
 
     def loop(self):
-        while True:
+        def check_exit():
             with self.lock:
-                if not self._is_running:
-                    return
+                return not self._is_running
+            return False
 
-            block = self.queue.get()
-            if block[0] < len(self.cmd):
-                self.cmd[block[0]](*block[1])
+        while True:
+            if check_exit(): return
 
-                if block[2]:
-                    start = datetime.datetime.now()
-                    while not (self.control.is_moving() and (datetime.datetime.now() - start).seconds < 2.0):
-                        time.sleep(0.1)
-                    while self.control.is_moving():
-                        time.sleep(0.1)
+            try:
+                block = self.queue.get(timeout=1)
+            except Exception as e:
+                pass
+            else:
+                if block[0] < len(self.cmd):
+                    self.cmd[block[0]](*block[1])
+
+                    if block[2]:
+                        start = datetime.datetime.now()
+                        # print (not self.control.is_moving() and (datetime.datetime.now() - start).seconds < 2.0)
+                        while not self.control.is_moving() and (datetime.datetime.now() - start).seconds < 2.0:
+                            if check_exit(): return
+                            time.sleep(0.1)
+                        while self.control.is_moving():
+                            # print (self.control.is_moving())
+                            if check_exit(): return
+                            time.sleep(0.5)
 
     def stop(self):
+        self.control.stop()
         with self.lock:
             self._is_running = 0
         
         self.thread = None
-        self.control.stop()
 
     def __str__(self):
         txt = ''
@@ -187,6 +205,7 @@ class Control:
         if Control._en_servo:
             self.motor[config.END_EFFECTOR_ID] = DriverServo(config.END_EFFECTOR_ID)
             self.motor_group1.add_driver(self.motor[config.END_EFFECTOR_ID])
+            self.cut_mango(False)
 
         self.delay_time = datetime.datetime(1970,1,1)
         self.is_update = False
@@ -197,13 +216,16 @@ class Control:
 
     def plane_move(self, x_pos, y_pos, z_pos, speed = 0):
         rad = (self.position[3]) * np.pi / 180
-        x = x_pos * np.cos(rad) - z_pos * np.sin(rad)
-        z = x_pos * np.sin(rad) + z_pos * np.cos(rad)
+        # rad -= np.pi / 2
+        # x = x_pos * np.cos(rad) - z_pos * np.sin(rad)
+        # z = x_pos * np.sin(rad) + z_pos * np.cos(rad)
+        x = x_pos * np.sin(rad) + z_pos * np.cos(rad)
+        z = -x_pos * np.cos(rad) + z_pos * np.sin(rad)
 
         return self.move(x, y_pos, z, speed)
 
     def move(self, x_pos, y_pos, z_pos, speed = 0):
-        return self.move_to(self.position[4] + x_pos, self.position[1] + y_pos, self.position[5] + z_pos)
+        return self.move_to(self.position[5] + x_pos, self.position[1] + y_pos, self.position[6] + z_pos)
 
     def move_to(self, x_pos, y_pos, z_pos, speed = 0): # pos in mm, velo in mm/s
         # check input
@@ -229,7 +251,7 @@ class Control:
     def cut_mango(self, is_cut):
         servo = self.motor[config.END_EFFECTOR_ID]
         
-        servo.enable(1)
+        servo.enable(config.SERVO_CUTTER, 1)
         servo.set(config.SERVO_CUTTER, config.servo_cutter_cut if is_cut is True else config.servo_cutter_open)
     
     def stop_move(self):
@@ -342,6 +364,7 @@ class Control:
             if time_diff < config.planner_update_time: # ms
                 sleep_more = config.planner_update_time - time_diff
                 time.sleep(sleep_more / 1000)
+                # print ("time", sleep_more)
                             
             if i % 2 == 0:
                 self._update()

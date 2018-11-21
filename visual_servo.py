@@ -7,6 +7,11 @@ from Driver.stereo import DriverStereo
 from motion_control import Planner
 from mango_detection import yolo
 
+def true_depth(pos, z):
+    return pos * z / 750
+
+def makeInt(box):
+    return [int(i) for i in box]
 
 def get_center(rect, num = 0):
     x, y, w, h = rect
@@ -16,31 +21,42 @@ def get_center(rect, num = 0):
     else:
         return a
 
-def get_pos_from_stereo(frame, lbox, camera):
-    frame_height, frame_width, ch = frame[1].shape
 
-    rbox = DriverStereo.find_lower_mean_r(frame[1], frame[2], lbox)
-    disparity = DriverStereo.find_disparity_from_box(lbox, rbox, (frame_height, frame_width))
+def get_pos_from_stereo(frame, lbox, camera, scale=None):
+    scale = 0.9
+    if scale is not None:
+        cen = lbox[0] + lbox[2]/2, lbox[1] + lbox[3]/2
+        w, h = lbox[2:4]
+        w *= scale
+        h *= scale
+        lbox = makeInt((cen[0] - w/2, cen[1] - h/2, w, h))
+    else:
+        lbox = makeInt(lbox)
+    rbox, disparity = DriverStereo.find_lower_mean_r(frame[1], frame[2], lbox)
+    # disparity = DriverStereo.find_disparity_from_box(lbox, rbox, frame[1].shape[:2])
     diff_z = camera.get_depth(disparity)
+
+    # print (disparity, diff_z)
     
     clbox = get_center(lbox)
     crbox = get_center(rbox)
 
-    clbox[0] = clbox[0] * diff_z / config.CAMERA_FOCAL_LEFT[0] # mm
-    clbox[1] = clbox[1] * diff_z / config.CAMERA_FOCAL_LEFT[1] # mm
-    crbox[0] = crbox[0] * diff_z / config.CAMERA_FOCAL_RIGHT[0] # mm
-    crbox[1] = crbox[1] * diff_z / config.CAMERA_FOCAL_RIGHT[1] # mm
+    # clbox[0] = clbox[0] * diff_z / config.CAMERA_FOCAL_LEFT[0] # mm
+    # clbox[1] = clbox[1] * diff_z / config.CAMERA_FOCAL_LEFT[1] # mm
+    # crbox[0] = crbox[0] * diff_z / config.CAMERA_FOCAL_RIGHT[0] # mm
+    # crbox[1] = crbox[1] * diff_z / config.CAMERA_FOCAL_RIGHT[1] # mm
 
-    return np.array([int(clbox[0] + crbox[0])/2, clbox[1], diff_z], dtype=np.float64)
+    return np.array([int((clbox[0] + crbox[0])/2), int((clbox[1] + crbox[1]) / 2), diff_z], dtype=np.float64), disparity
+    # return np.array([int()])
 
 class AvoidMango:
     """docstring for AvoidMango"""
     def __init__(self):
         self.list_mango = []
 
-    def add(self, pos = np.array([0, 0, 0], dtype=np.float64)):
-        if pos == np.array([0, 0, 0], dtype=np.float64):
-            return
+    def add(self, pos = None):
+        # if pos == None:
+        #     return
         self.list_mango.append(pos)
 
     def clear(self):
@@ -67,6 +83,10 @@ class VisualServo:
         self.tracker = None
         self.boxes = None
 
+        self.detect_pos = None
+        self.last_z = None
+        self.disparity = 0
+
     def ob_tracking(self, tracker_name):
         OPENCV_OBJECT_TRACKERS = {
             "csrt": cv2.TrackerCSRT_create,
@@ -84,26 +104,28 @@ class VisualServo:
     def get_color(self):
         return self.color
 
-    def loop(self):
+    def loop(self, DEBUG = False):
         planner = Planner.getInstance()
-        #time.sleep(1)
+        while not planner.is_empty() or planner.is_moving():
+            time.sleep(0.5)
+            continue
         
         error_count = 0
         track_count = 0
+        low_pass_count = 0
+        low_pass_pos = [0, 0, 0]
         z_length_sum = 0
         use_tracker = False
         result = dict()
-        while self._is_running and error_count < config.visual_failed_count:
-            if not planner.is_empty() or planner.is_moving():
-                time.sleep(0.5)
-                continue
+        while True:
+            if not self._is_running: return False
+            if not DEBUG:
+                if error_count > config.visual_failed_count: break
 
-            depth = planner.get_control().get_depth()
+            cur_pos = planner.get_control().get_pos_arm()
+            depth = planner.get_control().get_depth() if not DEBUG else 300
             if depth <= config.cut_length:
                 break
-
-            # get current position
-            cur_pos = planner.get_control().get_pos_arm()
             
             # move servo
             frame = self.camera.read()
@@ -112,31 +134,32 @@ class VisualServo:
                 error_count += 1
                 continue
 
-            frame_height, frame_width, ch = frame[1].shape
-            frame_center = (int(frame_width/2), int(frame_height/2))
-            
             if self.tracker and self.boxes:
-                (use_tracker, box) = self.tracker.update(frame[1])
-                result['boxes'] = box
+                (use_tracker, box) = self.tracker.update(frame[1].copy())
+                result['boxes'] = (box)
                 track_count += 1
             
             if not use_tracker:
-                cv2.imshow("Frame - 1", frame[1])
-                cv2.waitKey(1)
-                results = yolo.detect(frame[1], self.net, 0.85, self.show_image, get_list=True)
+                results = yolo.detect(frame[1], self.net, 0.85, False, get_list=True)
                 while 1:
                     (i, color) = yolo.find_max_scores(results[0], results[1], 0.85)
                     if i < 0:
                         result = {}
                         break
 
-                    pos = get_pos_from_stereo(frame, results[i][2], self.camera)
-                    pos[2] += cur_pos[1] # x, y, z
-                    if not self.avoidMango.avoid_this(pos):
+                    bounds = (results[1][i][2])
+                    pos, self.disparity = get_pos_from_stereo(frame, bounds, self.camera)
+                    pos[0] = true_depth(pos[0], pos[2]) + cur_pos[0]
+                    pos[1] = true_depth(pos[1], pos[2]) + cur_pos[1]
+                    self.detect_pos = pos
+                    if not DEBUG:
+                        pos[2] += cur_pos[2] + config.position_cam_from_end # x, y, z
+                    
+                    if not self.avoidMango.avoid_this(pos, 30):
                         result = {
-                            'boxes': results[i][2],
-                            'center': get_center(results[i][2], 1),
-                            'score': results[i][1],
+                            'boxes': bounds,
+                            'center': get_center(bounds, 1),
+                            'score': results[1][i][1],
                             'class': color,
                         }
                         break
@@ -144,73 +167,102 @@ class VisualServo:
                         results.pop(i)
 
                 self.tracker = None
+
            
             if not 'boxes' in result.keys():
                 print ("Not Found mango")
                 error_count += 1
-                # planner.stop_move()                
+                if self.show_image:
+                    cv2.imshow("Visual Servo", frame[1])
+                    cv2.waitKey(1)
+                while planner.is_moving():
+                    time.sleep(0.5)
                 continue
-
-            result['center'] = get_pos_from_stereo(frame, lbox, self.camera)
-            diff_z = result['center'][2]
-            diff_y = (frame_center[1] - result['center'][1]) # mm
-            diff_x = (result['center'][0] - frame_center[0]) # mm
                 
+            result['center'], self.disparity = get_pos_from_stereo(frame, result['boxes'], self.camera, self.detect_pos[2] / self.last_z if use_tracker else None)
+            diff_z = result['center'][2] if result['center'][2] < config.arm_max_workspace else depth
+            self.last_z = diff_z
+
             if self.show_image:
-                if use_tracker:
-                    bbox = result['boxes']
-                    p1 = (int(bbox[0]), int(bbox[1]))
-                    p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
-                    cv2.rectangle(frame[1], p1, p2, (255,0,0), 2, 1)
-                    result['image'] = frame[1]
-                else:
-                    if 'center' in result.keys():
-                        cv2.line(result['image'], frame_center, result['center'], (255, 127, 0), 8)
-                cv2.imshow("Visual Servo", result['image'])
+                cv2.imshow("Visual Servo", self.makeRectangle(frame[1].copy(), frame[2], result['boxes'], diff_z))
                 cv2.waitKey(1)
 
-
-            # z_length_sum += diff_z
-            # zm = 1000
-            # zf = zm  + z_length_sum
-            
-            # diff_x = min(diff_x, config.visual_max_move) * (zf / (zm + z_length_sum)) * 2.5
-            # diff_y = min(diff_y, config.visual_max_move) * (zf / (zm + z_length_sum))
-            # diff_z = min(diff_z, config.visual_max_move) * (zf / (zm + z_length_sum))
-
-            diff_z += config.position_cam_from_end # move z for length of end-effector to fruit
-            if not planner.plane_move(diff_x, diff_y, diff_z, 0, config.default_speed):
-                print ("out of range.")
-                return False
-            # while planner.is_moving(): time.sleep(0.1)
-            error_count = 0
-        
             self.color = result['class']
             self.boxes = result['boxes']
             
             if self.tracker == None:
                 self.tracker = self.ob_tracking(config.object_tracker)
-                self.tracker.init(frame[1], result['boxes'])
+                self.tracker.init(frame[1], tuple(result['boxes']))
                 (use_tracker, box) = self.tracker.update(frame[1])
-                
+
             if track_count >= config.object_track_count and config.object_track_count != 0:
                 self.tracker = None
                 track_count = 0
                 use_tracker = False
             
-#             time.sleep(math.sqrt(diff_x**2 + diff_y**2 + diff_z**2) / config.default_speed)
+            fc = get_center([0, 0] + list(frame[1].shape[:2])[::-1])
+            diff_y = (fc[1] - result['center'][1]) # mm
+            diff_x = (result['center'][0] - fc[0]) # mm
+            diff_y = true_depth(diff_y, diff_z)
+            diff_x = true_depth(diff_x, diff_z)
 
-            #print ("boxes", result['boxes'], 'center', result['center'])
+            # print (fc[0], result['center'][0], fc[1], result['center'][1])
             print ("move distance x:{}, y:{}, z:{}, d:{}".format(diff_x, diff_y, diff_z, depth))
+            alpha = 0.864
+            low_pass_pos[0] = low_pass_pos[0] * alpha + diff_x * (1 - alpha)
+            low_pass_pos[1] = low_pass_pos[1] * alpha + diff_y * (1 - alpha)
+            low_pass_pos[2] = low_pass_pos[2] * alpha + diff_z * (1 - alpha)
+            low_pass_count += 1
+            if config.visual_low_pass_count < low_pass_count:
+                low_pass_count = 0
+                if not DEBUG and not planner.is_moving():
+                    print ("low pass move distance x:{}, y:{}, z:{}, d:{}".format(low_pass_pos[0], low_pass_pos[1], low_pass_pos[2], depth))                    
+                    # get current position
+                    diff_z += config.position_cam_from_end # move z for length of end-effector to fruit
+                    if not planner.get_control().plane_move(low_pass_pos[0], low_pass_pos[1], low_pass_pos[2] * 0.5a, 0):
+                        pos = result['center']
+                        pos[0] = true_depth(pos[0], pos[2]) + cur_pos[0]
+                        pos[1] = true_depth(pos[1], pos[2]) + cur_pos[1]
+                        pos[2] += cur_pos[2] + config.position_cam_from_end
+                        self.avoidMango.add(pos)
+                        print ("out of range.")
+                        return False
+                    print (planner.get_control())
+                # while planner.is_moving(): time.sleep(0.1)
+            error_count = 0
+
         return True if error_count < config.visual_failed_count else False
 
-    def start(self):
-        self._is_running = True
-        return self.run()
+    def makeRectangle(self, frame, frame_alt, boxes, curr_z):
+        cen = boxes[0] + boxes[2]/2, boxes[1] + boxes[3]/2
+        w, h = boxes[2:4]
+        scale = self.detect_pos[2] / curr_z
+        w *= scale
+        h *= scale
+        #x, y, w, h = makeInt(boxes)
+        x, y, w, h = makeInt((cen[0] - w/2, cen[1] - h/2, w, h))
+        fh, fw = frame.shape[:2]
+        p1 = (x, y)
+        p2 = (x + w, y + h)
+        # print (p1, p2)
+        cv2.rectangle(frame, p1, p2, (255,0,0), 2, 1)
+        pc = tuple(get_center(boxes))
+        fc = tuple(get_center([0, 0, fw, fh]))
+        cv2.line(frame, fc, pc, (255, 127, 0), 8)
+        try:
+            frame[y:y+h,x:x+w] = frame[y:y+h,x:x+w] // 2 + frame_alt[y:y+h,x-self.disparity:x+w-self.disparity] // 2
+        except ValueError:
+            pass
+        return frame
 
-    def run(self):
+
+    def start(self, DEBUG = False):
+        self._is_running = True
+        return self.run(DEBUG)
+
+    def run(self, DEBUG):
         self.camera.start()
-        res = self.loop()
+        res = self.loop(DEBUG)
         self.camera.stop()
 
         self._is_running = False
