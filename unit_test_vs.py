@@ -8,22 +8,22 @@ import config
 import cv2
 import numpy as np
 
-import time
+import datetime, time, sys
 
 from Driver.stereo import DriverStereo
 from mango_detection import yolo
 from visual_servo import VisualServo, AvoidMango
 from motion_control import Planner
 
-# def turn_arm_drop_mango(color = 1):
-#     if color not in [1, 2]:
-#         color = 1
-#     #print (config.basket[color])
-#     deg_go = config.basket[color] - planner.get_arm_deg()
-#     forward = config.arm_min_workspace - planner.get_arm_length()
-#     planner.move_single_cam(0, 0, forward, deg_go, config.default_speed)
-    
-#     return True if not planner.is_moving(4) else False
+
+def wait(planner, timeout = 0): # ms
+    start = datetime.datetime.now()
+    while not planner.is_empty() or planner.is_moving():
+        if timeout > 0 and ((datetime.datetime.now() - start).microseconds / 1000) > timeout:
+            return 0
+        time.sleep(0.7)
+
+    return 1
 
 
 def drop_fruit(planner, color, state = 0):
@@ -44,21 +44,28 @@ def drop_fruit(planner, color, state = 0):
     planner.add(Planner.CUT, [False])
 
 def main():
-    net = yolo.load('yolov3_3300.weights')
+    net = yolo.load('yolov3_4500.weights')
     cam_end_arm = DriverStereo(2)
+    cam_end_arm.start()
     planner = Planner().getInstance()
     # time.sleep(5)
     # planner.get_control().stop()
     # planner.stop()
-
+    time.sleep(1)
     avoidMango = AvoidMango()
     vs = VisualServo(net, cam_end_arm, avoidMango, True)
     if vs.start(0):
         drop_fruit(planner, vs.get_color(), 1)
 
+    # i = 1
     while not planner.is_empty() or planner.is_moving():
-        time.sleep(0.5)
-        print ("wait ...")
+        time.sleep(0.7)
+        # sys.stdout.write("wait " + "." * i)
+        # i += 1
+        # print ("wait ...")
+    # print ("\n")
+
+    wait(planner)
     print ("Exit Visual Servo")
     planner.stop()
 
