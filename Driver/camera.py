@@ -7,10 +7,10 @@ import sys
 from threading import Thread
 # import the Queue class from Python 3
 if sys.version_info >= (3, 0):
-    from queue import Queue
+    from queue import Queue, Empty
 # otherwise, import the Queue class for Python 2.7
 else:
-    from Queue import Queue
+    from Queue import Queue, Empty
 
 import config
 
@@ -23,9 +23,6 @@ class DriverCamera:
         self.Q = Queue(maxsize=max(queueSize, 2))
         self.stopped = False
 
-        self.vs = cv2.VideoCapture(id)
-        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
         # self.obj_points = []
         # self.img_points = []
@@ -35,7 +32,16 @@ class DriverCamera:
 
         # self._load()
 
+    def clear(self):
+        if self.Q.empty(): return
+        while not self.Q.empty():
+            self.read()
+
     def start(self):
+        self.vs = cv2.VideoCapture(self.id)
+        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.clear()
         # start a thread to read frames from the file video stream
         self.thread = Thread(target=self.update, args=())
         self.thread.daemon = True
@@ -54,22 +60,32 @@ class DriverCamera:
             if not self.Q.full():
                 # read the next frame from the file
                 (grabbed, frame) = self.vs.read()
-                if self.img_points:
+                if 0:
                     tmp = cv2.undistort(frame, self.camera_mtx, self.camera_distortion, None, self.camera_new_mtx)
                     frame = tmp
  
                 # add the frame to the queue
-                self.Q.put((grabbed, frame))
+                if grabbed:
+                    self.Q.put((grabbed, frame))
             else:
                 self.read()
 
+            # yield
+
+        self.vs.release()
+
     def read(self):
         # return next frame in the queue
+        # return self.Q.get(timeout = 1)
+        # try:
         return self.Q.get()
+        # except Empty:
+        #     pass
 
     def stop(self):
-        self.thread = None
         self.stopped = True
+        self.thread.join()
+        self.thread = None
 
     # def calibrate(self, col = 6, row = 7, size = 25, count = 15, roi = 1):
     #     self.start()

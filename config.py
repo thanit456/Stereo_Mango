@@ -23,11 +23,11 @@ encoder_pulse_base_l    = (2000 * 4) / (2 * np.pi * 75)
 encoder_pulse_base_r    = (2000 * 4) / (2 * np.pi * 75)
 encoder_pulse_lift_l    = (2000 * 4) / (8 * 20)
 encoder_pulse_lift_r    = (2000 * 4) / (8 * 20)
-encoder_pulse_middle    = (160 * 1024 * 4) / (8 * 20)
+encoder_pulse_middle    = (175 * 1024 * 4) / (8 * 20)
 encoder_pulse_turret    = (2000 * 4) / 360
-encoder_pulse_forward   = (160 * 1024 * 4) / (5 * 24)
+encoder_pulse_forward   = (175 * 1024 * 4) / (5 * 24)
 
-default_spd = [540/2, 2, 1, 2, 540]
+default_spd = [540/2, 2, 2, 2, 540]
 k_moving_threshold = 1.5
 _moving_threshold = {
 	BASE_MOTOR_ID_L: default_spd[2] * k_moving_threshold,
@@ -36,7 +36,7 @@ _moving_threshold = {
 	LIFT_MOTOR_ID_R: default_spd[1] * k_moving_threshold,
 	MIDDLE_MOTOR_ID: default_spd[0] * k_moving_threshold,
 	TURRET_MOTOR_ID: default_spd[3] * k_moving_threshold,
-	FORWARD_MOTOR_ID: default_spd[4] * k_moving_threshold,
+	FORWARD_MOTOR_ID: 50, # default_spd[4] * k_moving_threshold,
 }
 
 # Camera
@@ -62,7 +62,7 @@ url = "http://localhost:8080/api"
 # section robot
 workspace_z         = 15000 # tune
 workspace_y         = 1360 # tune
-workspace_x         = 1269.5 # tune
+workspace_x         = 1160.714285714 # tune
 # workspace_arm_offset_x = 195.3125 # tune
 
 SERVO_CUTTER            = 0x01
@@ -79,7 +79,7 @@ drop_position = {
 # Section arm configure
 arm_start_position = 0 # tune
 arm_dist_from_joint_turret = 575 # tune
-arm_forward_max_length = 543.640136719 # 555.17578125 # tune
+arm_forward_max_length = 507.589285714 # 555.17578125 # tune 543.640136719
 # arm_all_length = 1090
 
 arm_min_workspace = arm_dist_from_joint_turret
@@ -89,18 +89,21 @@ offset_x_min = (drop_position[FORWARD_MOTOR_ID][0] + arm_min_workspace) - drop_p
 offset_x_max = arm_min_workspace - workspace_x + (drop_position[MIDDLE_MOTOR_ID][3] + drop_position[FORWARD_MOTOR_ID][3])
 
 # Section algorithm
-planner_update_time = 200 #4 + 1.5 + 3.5 * (8 - 1) #ms
+planner_update_time = 4 + 1.5 + 3.5 * (8 - 1) #ms
+
+#Avoid Mango
+avoid_range = 300
 
 # section visual servo
-visual_max_move = 10 # mm  # tune
-visual_failed_count = 10  # tune
-visual_low_pass_count = 5
+# visual_max_move = 10 # mm  # tune
+visual_failed_count = 15  # tune
+visual_low_pass_count = 30
 
 # object tracking
 object_tracker = 'kcf' # kcf, csrt, boosting, mil, tld, mediainflow, mosse
-object_track_count = 5
+object_track_count = 10
 
-end_cam_offset = np.array([0, 0], dtype=np.float64) # x, y
+end_cam_offset = np.array([0, -5], dtype=np.float64) # x, y
 arm_cam_offset = np.array([0, 0], dtype=np.float64) # x, y
 
 # section state move turret for find max score

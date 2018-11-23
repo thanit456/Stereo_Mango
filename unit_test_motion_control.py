@@ -1,19 +1,28 @@
 from motion_control import Planner, Control
 import motion_control as mc
 import numpy as np
+import cv2
 
 import config
-import time
+import time, datetime
 import pprint
-import datetime
 
-def wait(con, t = 5):
-    st = datetime.datetime.now()
-    while con.is_moving(): # or (datetime.datetime.now() - st).seconds < t:
-        print (con)
-        time.sleep(1)
+import config
+# driver
+from Driver.camera import DriverCamera
+from Driver.stereo import DriverStereo
+# visual servo
+import visual_servo as vs
+# detction
+import mango_detection.yolo as yolo
+
 
 def test_control():
+    def wait(con, t = 5):
+        st = datetime.datetime.now()
+        while con.is_moving(): # or (datetime.datetime.now() - st).seconds < t:
+            print (con)
+            time.sleep(1)
     print ("Test Control")
     con = Control.getInstance()
     
@@ -62,11 +71,77 @@ def move_plane():
     time.sleep(3)
     control.stop()
 
+def test_lift():
+    net = yolo.load('yolov3_4500.weights')
+    planner = Planner().getInstance()
+    cam_on_arm = DriverCamera(1)
+
+    lift_up_constant = 0.400
+    lift_up_accept = 2 # pixel
+
+    def wait(timeout = 0): # ms
+        start = datetime.datetime.now()
+        while not planner.is_empty() or planner.is_moving():
+            if timeout > 0 and ((datetime.datetime.now() - start).microseconds / 1000) > timeout:
+                return 0
+            time.sleep(0.7)
+
+        return 1
+
+    def makeRectangle(frame, boxes):
+        x, y, w, h = boxes
+        fh, fw = frame.shape[:2]
+        p1 = (x, y)
+        p2 = (x + w, y + h)
+        # print (p1, p2)
+        cv2.rectangle(frame, p1, p2, (255,0,0), 2, 1)
+        pc = tuple(vs.get_center(boxes))
+        fc = tuple(vs.get_center([0, 0, fw, fh]))
+        cv2.line(frame, fc, pc, (255, 127, 0), 8)
+        
+        return frame
+
+    wait()
+
+    cam_on_arm.start()
+    print ("start")
+    while True:
+        frame = cam_on_arm.read()[1]
+        result = yolo.detect(frame, net, 0.8, False, "MainControl")
+
+        tmp = frame.copy() 
+        if 'boxes' in result:
+            cv2.imshow("Test Lift", makeRectangle(tmp, result['boxes']))
+            cv2.waitKey(1)
+        else:
+            cv2.imshow("Test Lift", tmp)
+            cv2.waitKey(1)
+            print ("Not Found")
+            continue
+
+        fh, fw = frame.shape[:2]
+        fc = vs.get_center([0, 0, fw, fh])
+        dif_y = fc[1] - result['center'][1]
+
+        if abs(dif_y) < lift_up_accept:
+            break
+
+        print ("diff", dif_y, "move", dif_y * lift_up_constant)
+        planner.get_control().move(0, dif_y * lift_up_constant, 0, 0)
+        wait()
+
+    print ("final lift up")
+    planner.get_control().move(0, 120, 0, 0)
+    print ("Finish")
+    planner.stop()
+
+
 def main():
     # test_control()
     # test_planner()
     # test_ik()
-    move_plane()
+    # move_plane()
+    test_lift()
     
 
 if __name__ == '__main__':    

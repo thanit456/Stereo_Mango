@@ -1,7 +1,7 @@
 import pprint
 
 import numpy as np
-import datetime, time
+import datetime, time, sys
 from threading import Thread, Lock
 
 from Driver.motor import DriverMotor, DriverServo
@@ -15,9 +15,9 @@ def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
     while True:
         dif_pos = end_pos - middle_pos
         length = np.linalg.norm(dif_pos)
-        # print ("Diff z", dif_pos[1])
+        print ("Diff z", dif_pos[1])
 
-        if dif_pos[1] > config.arm_max_workspace or ck > 2:
+        if dif_pos[1] > config.arm_max_workspace or ck > 10:
             return [0, 0, 0, 0]
         
         # radius = max(dif_pos[1], config.arm_min_workspace) if length > config.arm_max_workspace else max(length, config.arm_min_workspace)
@@ -33,7 +33,7 @@ def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
         x -= config.offset_x_min
         if abs(x) < 1e-1: x = 0
         if abs(z) < 1e-1: z = 0
-        if (0 <= x <= config.workspace_x) and 0 <= z:
+        if (0 <= x <= config.workspace_x): # and middle_pos[1] == z:
             break
 
         x_new = x - max(0, min(config.workspace_x, x))
@@ -95,6 +95,8 @@ class Planner:
         self.control = Control()
         self.cmd = [self.control.move, self.control.move_to, self.control.plane_move, self.control.set_pulse, self.control.set_position, self.control.cut_mango]
 
+        self.interrupt = False
+
         self.thread = None
         self.start()
 
@@ -105,6 +107,7 @@ class Planner:
         return self.control.is_moving()
 
     def get_control(self):
+        self.interrupt = True
         return self.control
 
     def add(self, cmd, args, wait = True):
@@ -127,24 +130,47 @@ class Planner:
         while True:
             if check_exit(): return
 
+            if self.interrupt:
+                self.wait()
+                self.interrupt = False
+
             try:
                 block = self.queue.get(timeout=1)
             except Exception as e:
                 pass
+                # print ("Planer -", e) # timeout
             else:
                 if block[0] < len(self.cmd):
                     self.cmd[block[0]](*block[1])
 
                     if block[2]:
-                        start = datetime.datetime.now()
-                        # print (not self.control.is_moving() and (datetime.datetime.now() - start).seconds < 2.0)
-                        while not self.control.is_moving() and (datetime.datetime.now() - start).seconds < 2.0:
+                        time.sleep(2)
+                        while self.is_moving():
                             if check_exit(): return
-                            time.sleep(0.1)
-                        while self.control.is_moving():
-                            # print (self.control.is_moving())
-                            if check_exit(): return
-                            time.sleep(0.5)
+                            time.sleep(0.7)
+
+    def wait(self, timeout = 0): # ms
+        start = datetime.datetime.now()
+        i = 1
+        if self.interrupt:
+            while self.is_moving():
+                if timeout > 0 and ((datetime.datetime.now() - start).microseconds / 1000) > timeout:
+                    sys.stdout.write("\n")
+                    return 0
+                sys.stdout.write("\rPlanner - Waiting " + "." * i)
+                i += 1
+                time.sleep(0.7)
+        else:
+            while not self.is_empty() or self.is_moving():
+                if timeout > 0 and ((datetime.datetime.now() - start).microseconds / 1000) > timeout:
+                    sys.stdout.write("\n")
+                    return 0
+                sys.stdout.write("\rPlanner - Waiting " + "." * i)
+                i += 1
+                time.sleep(0.7)
+
+        sys.stdout.write("\n")
+        return 1
 
     def stop(self):
         self.control.stop()
@@ -238,12 +264,17 @@ class Control:
         middle_pos = np.array([self.position[0], self.position[2]], dtype=np.float64)
 
         klist = inverse_kinematics(middle_pos, end_pos)
+        print (klist)
         if klist == [0, 0, 0, 0]:
             return False
 
         x, z, rad, a = klist
         velo = list(config.default_spd)
         pos = [x, y_pos, z, rad, a]
+
+
+        # if self.goal[4] == config.arm_max_workspace and a == config.arm_max_workspace:
+        #     return False
 
         self.set_all_position(pos, velo)
         return True
@@ -276,6 +307,9 @@ class Control:
 
     def get_pos_arm(self):
         return np.array([self.position[5], self.position[1], self.position[6]], dtype=np.float64)
+
+    def get_all_pos(self):
+        return np.array(self.position)
     
     def get_depth(self):
         return self.motor[config.END_EFFECTOR_ID].get_range() if Control._en_servo else 0

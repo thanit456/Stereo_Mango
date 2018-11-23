@@ -49,7 +49,9 @@ class Group:
         # pprint (data)
         tmp = None
         try:
-            tmp = requests.post(url, json=data).json()
+            tmp = requests.post(url, json=data)
+            pprint (tmp)
+            tmp = tmp.json()
         except Exception as e:
             print ('sync group id-{}'.format(self.idx), e)
             return 
@@ -62,7 +64,7 @@ class Group:
                 # pprint (tmp)
                 for i in range(4):
                     self.list_driver[motor_id].servo[i]['cur_pos'] = tmp[str(motor_id)]['ch{}_pos'.format(i+1)]
-                self.list_driver[motor_id].range_finder = tmp[str(motor_id)]['range']
+                self.list_driver[motor_id].range_finder = self.list_driver[motor_id].range_finder * 0.864 + tmp[str(motor_id)]['range'] * 0.136
     def is_moving(self):
         # self.get()
         for i in self.list_driver.keys():

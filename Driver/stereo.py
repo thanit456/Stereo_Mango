@@ -7,10 +7,10 @@ import sys
 from threading import Thread, Lock
 # import the Queue class from Python 3
 if sys.version_info >= (3, 0):
-    from queue import Queue
+    from queue import Queue, Empty
 # otherwise, import the Queue class for Python 2.7
 else:
-    from Queue import Queue
+    from Queue import Queue, Empty
 
 import config
 
@@ -24,14 +24,20 @@ class DriverStereo:
         self.Q = Queue(maxsize=max(queueSize, 2))
         self.stopped = False
 
+        self.rectify = False
         self._load()
-
-        self.vs = cv2.VideoCapture(id)
-        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
-        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         self.lock = Lock()
 
+    def clear(self):
+        if self.Q.empty(): return
+        while not self.Q.empty():
+            self.read()
+
     def start(self):
+        self.vs = cv2.VideoCapture(self.id)
+        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
+        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.clear()
         # start a thread to read frames from the file video stream
         self.thread = Thread(target=self.update, args=())
         self.thread.daemon = True
@@ -39,40 +45,43 @@ class DriverStereo:
 
     def update(self):
         # keep looping infinitely
-        while True:
+        while not self.stopped:
             # if the thread indicator variable is set, stop the
             # thread
-            with self.lock:
-                if self.stopped:
-                    return
  
             # otherwise, ensure the queue has room in it
             if not self.Q.full():
                 # read the next frame from the file
                 (grabbed, frame) = self.vs.read()
-                frame_height, frame_width, ch = frame.shape
-                right = frame[::-1, :int(frame_width/2)]
-                left = frame[::-1, int(frame_width/2):]
+                if grabbed:
+                    frame_height, frame_width, ch = frame.shape
+                    right = frame[::-1, :int(frame_width/2)]
+                    left = frame[::-1, int(frame_width/2):]
 
-                left = left[::, ::-1]
-                right = right[::, ::-1]
+                    left = left[::, ::-1]
+                    right = right[::, ::-1]
 
-                if self.rectify:
-                    left = cv2.remap(left, self.leftMapX, self.leftMapY, REMAP_INTERPOLATION)
-                    right = cv2.remap(right, self.rightMapX, self.rightMapY, REMAP_INTERPOLATION)
+                    if self.rectify:
+                        left = cv2.remap(left, self.leftMapX, self.leftMapY, REMAP_INTERPOLATION)
+                        right = cv2.remap(right, self.rightMapX, self.rightMapY, REMAP_INTERPOLATION)
 
                 # add the frame to the queue
-                self.Q.put((grabbed, left, right))
-            else:
+                    self.Q.put((grabbed, left, right))
+            elif not self.Q.empty():
                 self.read()
+        self.vs.release()
 
     def read(self):
         # return next frame in the queue
+        # try:
         return self.Q.get()
+        # except Empty:
+        #     pass
 
     def stop(self):
         with self.lock:
             self.stopped = True
+            self.thread.join()  
 
     def get_depth(self, disparity = 1):
         # if 123.0 < disparity:
@@ -84,7 +93,7 @@ class DriverStereo:
         # else: # elif disparity <= 80.0:
         #     return -8.3246 * disparity + 1275.6
         # return 94558 / disparity - 196.78
-        return 750 * 59.5 / disparity
+        return 750 * 69 / disparity
 
     def _load(self):
         try:
