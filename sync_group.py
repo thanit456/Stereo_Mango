@@ -50,7 +50,7 @@ class Group:
         tmp = None
         try:
             tmp = requests.post(url, json=data)
-            pprint (tmp)
+            # pprint (tmp)
             tmp = tmp.json()
         except Exception as e:
             print ('sync group id-{}'.format(self.idx), e)

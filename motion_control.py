@@ -15,13 +15,14 @@ def inverse_kinematics(middle_pos, end_pos): # pos np.array([x, z])
     while True:
         dif_pos = end_pos - middle_pos
         length = np.linalg.norm(dif_pos)
-        print ("Diff z", dif_pos[1])
+        # print ("Diff z", dif_pos[1])
+
 
         if dif_pos[1] > config.arm_max_workspace or ck > 10:
             return [0, 0, 0, 0]
         
         # radius = max(dif_pos[1], config.arm_min_workspace) if length > config.arm_max_workspace else max(length, config.arm_min_workspace)
-        radius = max(length, config.arm_min_workspace)
+        radius = max(min(length, config.arm_max_workspace), config.arm_min_workspace)
         rad = np.arcsin(dif_pos[1] / radius)
         rad = rad if dif_pos[0] >= 0 else (np.pi / 2 - rad) + np.pi / 2
         # rad = np.arctan(dif_pos[1] / dif_pos[0]) if dif_pos[0] != 0 else (np.pi / 2 if dif_pos[1] > 0 else -np.pi / 2)
@@ -144,7 +145,7 @@ class Planner:
                     self.cmd[block[0]](*block[1])
 
                     if block[2]:
-                        time.sleep(2)
+                        time.sleep(0.7)
                         while self.is_moving():
                             if check_exit(): return
                             time.sleep(0.7)
@@ -263,8 +264,9 @@ class Control:
         end_pos = np.array([x_pos, z_pos], dtype=np.float64)
         middle_pos = np.array([self.position[0], self.position[2]], dtype=np.float64)
 
+        # print (self.position)
         klist = inverse_kinematics(middle_pos, end_pos)
-        print (klist)
+        # print (klist)
         if klist == [0, 0, 0, 0]:
             return False
 
@@ -314,8 +316,13 @@ class Control:
     def get_depth(self):
         return self.motor[config.END_EFFECTOR_ID].get_range() if Control._en_servo else 0
 
+    def _wait(self, motor):
+        while (motor.goal_pos - motor.goto_pos) > 50:
+            time.sleep(0.7)
+
     def set_all_position(self, pos, velo): # x, y, z, deg, arm
-        for i in range(len(config.MOTOR_GROUP)):
+        order = [0, 3, 1, 4, 2]
+        for i in order:
             self.goal_pos[i] = pos[i]
             for id in config.MOTOR_GROUP[i]:
                 self.motor[id].enable(1)
@@ -327,6 +334,10 @@ class Control:
                     self.motor[id].set_goal(pos[i] - config.arm_min_workspace, velo[i])
                 else:
                     self.motor[id].set_goal(pos[i], velo[i])
+
+            if isinstance(self.motor[config.MOTOR_GROUP[i][0]], DriverMotor):
+                self._wait(self.motor[config.MOTOR_GROUP[i][0]])
+
         self.is_update = False
 
     def set_position(self, motor_id, pulse, velo, error_wait = 0):
@@ -381,6 +392,7 @@ class Control:
 
         self.position[0] += config.offset_x_min
         self.position[3] += config.arm_start_position
+        # print (self.position[4])
         self.position[4] += config.arm_min_workspace
         self.position[5] = self.position[0] + self.position[4] * np.cos(self.position[3] * np.pi / 180) # arm x
         self.position[6] = self.position[2] + self.position[4] * np.sin(self.position[3] * np.pi / 180) # arm z

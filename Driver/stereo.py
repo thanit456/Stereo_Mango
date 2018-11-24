@@ -22,11 +22,18 @@ class DriverStereo:
         # initialize the queue used to store frames read from
         # the video file
         self.Q = Queue(maxsize=max(queueSize, 2))
-        self.stopped = False
 
-        self.rectify = False
+        self.rectify = True
         self._load()
         self.lock = Lock()
+
+        self.vs = cv2.VideoCapture(self.id)
+        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
+        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 960)
+        self.vs.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.stopped = True
+        # codec = cv2.VideoWriter_fourcc(*'X264')
+        # self.vs.set(cv2.CAP_PROP_FOURCC, codec)
 
     def clear(self):
         if self.Q.empty(): return
@@ -34,10 +41,8 @@ class DriverStereo:
             self.read()
 
     def start(self):
-        self.vs = cv2.VideoCapture(self.id)
-        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
-        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        self.clear()
+        self.stopped = False
+        # self.clear()
         # start a thread to read frames from the file video stream
         self.thread = Thread(target=self.update, args=())
         self.thread.daemon = True
@@ -54,16 +59,7 @@ class DriverStereo:
                 # read the next frame from the file
                 (grabbed, frame) = self.vs.read()
                 if grabbed:
-                    frame_height, frame_width, ch = frame.shape
-                    right = frame[::-1, :int(frame_width/2)]
-                    left = frame[::-1, int(frame_width/2):]
-
-                    left = left[::, ::-1]
-                    right = right[::, ::-1]
-
-                    if self.rectify:
-                        left = cv2.remap(left, self.leftMapX, self.leftMapY, REMAP_INTERPOLATION)
-                        right = cv2.remap(right, self.rightMapX, self.rightMapY, REMAP_INTERPOLATION)
+                    [left, right] = self.split_frame(frame)
 
                 # add the frame to the queue
                     self.Q.put((grabbed, left, right))
@@ -74,6 +70,11 @@ class DriverStereo:
     def read(self):
         # return next frame in the queue
         # try:
+        if self.stopped:
+            (grabbed, frame) = self.vs.read()
+            if grabbed:
+                [left, right] = self.split_frame(frame)
+            return (grabbed, left, right)
         return self.Q.get()
         # except Empty:
         #     pass
@@ -83,17 +84,26 @@ class DriverStereo:
             self.stopped = True
             self.thread.join()  
 
-    def get_depth(self, disparity = 1):
-        # if 123.0 < disparity:
-        #     return -2.2714 * disparity + 675.22
-        # elif (97.0 < disparity <= 123.0) :
-        #     return -4.1764 * disparity + 908.14
-        # elif (80.0 < disparity <= 97.0) :
-        #     return -5.9514 * disparity + 1079.2
-        # else: # elif disparity <= 80.0:
-        #     return -8.3246 * disparity + 1275.6
-        # return 94558 / disparity - 196.78
-        return 750 * 69 / disparity
+    @staticmethod
+    def get_depth(disparity = 1):
+        disparity = max(1, disparity)
+        if (124<=disparity <= 167):
+            depth = 47409/disparity + 15.856
+        elif (98<=disparity<=123):
+            depth = 49208/disparity + 0.3388
+        elif (81<=disparity<=97):
+            depth = 46381/disparity + 26.896
+        elif (69<=disparity<=80):
+            depth = 46044/disparity + 36.039
+        else:
+            depth = 750*65.3 / disparity
+        return depth
+
+    @staticmethod
+    def get_true_depth(pos, dif_z):
+        x = pos[0] * dif_z * (20/24/600)
+        y = pos[1] * dif_z * (20/24/600)
+        return (x, y)
 
     def _load(self):
         try:
@@ -111,6 +121,20 @@ class DriverStereo:
             self.rightMapX = calibration["rightMapX"]
             self.rightMapY = calibration["rightMapY"]
             self.rightROI = tuple(calibration["rightROI"])
+
+    def split_frame(self, frame):
+        frame_height, frame_width, ch = frame.shape
+        right = frame[::-1, :int(frame_width/2)]
+        left = frame[::-1, int(frame_width/2):]
+
+        left = left[::, ::-1]
+        right = right[::, ::-1]
+
+        if self.rectify:
+            left = cv2.remap(left, self.leftMapX, self.leftMapY, REMAP_INTERPOLATION)
+            right = cv2.remap(right, self.rightMapX, self.rightMapY, REMAP_INTERPOLATION)
+
+        return [left, right]
 
     @staticmethod
     def find_lower_mean_r(imgl, imgr, rect_base_l):
@@ -147,3 +171,14 @@ class DriverStereo:
         d2 = (x2 + int(w2/2))
 
         return d1 - d2
+
+    @staticmethod
+    def get_pos(pos, cur_pos):
+        rad = (cur_pos[3]) * np.pi / 180
+        x_pos = true_depth(pos[0], pos[2])
+        y_pos = true_depth(pos[1], pos[2])
+        x = x_pos * np.sin(rad) + pos[2] * np.cos(rad)
+        z = -x_pos * np.cos(rad) + pos[2] * np.sin(rad) + config.position_cam_from_end
+
+        pos = np.array([cur_pos[5] + x, cur_pos[1] + y_pos, cur_pos[6] + z])
+        return pos

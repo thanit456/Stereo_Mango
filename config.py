@@ -27,7 +27,7 @@ encoder_pulse_middle    = (175 * 1024 * 4) / (8 * 20)
 encoder_pulse_turret    = (2000 * 4) / 360
 encoder_pulse_forward   = (175 * 1024 * 4) / (5 * 24)
 
-default_spd = [540/2, 2, 2, 2, 540]
+default_spd = [540*2/3, 2, 2, 2, 540]
 k_moving_threshold = 1.5
 _moving_threshold = {
 	BASE_MOTOR_ID_L: default_spd[2] * k_moving_threshold,
@@ -54,7 +54,8 @@ CAMERA_MARIX_RIGHT = np.array([[750.09851697, 0, 679.89629617], [0, 748.27845873
 
 CAMERA_FOCAL_LEFT = [CAMERA_MARIX_LEFT[0][0] * OV9750_PIXEL_SIZE_X, CAMERA_MARIX_LEFT[1][1] * OV9750_PIXEL_SIZE_Y]
 CAMERA_FOCAL_RIGHT = [CAMERA_MARIX_RIGHT[0][0] * OV9750_PIXEL_SIZE_X, CAMERA_MARIX_RIGHT[1][1] * OV9750_PIXEL_SIZE_Y]
-position_cam_from_end = -120
+
+position_cam_from_end = -100
 
 # Section api
 url = "http://localhost:8080/api"
@@ -78,7 +79,7 @@ drop_position = {
 
 # Section arm configure
 arm_start_position = 0 # tune
-arm_dist_from_joint_turret = 575 # tune
+arm_dist_from_joint_turret = 570 # tune
 arm_forward_max_length = 507.589285714 # 555.17578125 # tune 543.640136719
 # arm_all_length = 1090
 
@@ -97,21 +98,21 @@ avoid_range = 300
 # section visual servo
 # visual_max_move = 10 # mm  # tune
 visual_failed_count = 15  # tune
-visual_low_pass_count = 30
+visual_low_pass_count = 10
 
 # object tracking
 object_tracker = 'kcf' # kcf, csrt, boosting, mil, tld, mediainflow, mosse
 object_track_count = 10
 
-end_cam_offset = np.array([0, -5], dtype=np.float64) # x, y
-arm_cam_offset = np.array([0, 0], dtype=np.float64) # x, y
+end_cam_offset = np.array([0, 70, 70], dtype=np.float64) # x, y
+arm_cam_offset = np.array([0, 0, 0], dtype=np.float64) # x, y
 
 # section state move turret for find max score
 # deg_find_score = 0.5# deg  # tunev
 
 # section operate basket
 # cut_count = 2
-cut_length = 100
+cut_length = 160
 
 # section general
 # default_speed = 50 # mm/s  # not use in new control

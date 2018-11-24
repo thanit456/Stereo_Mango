@@ -41,6 +41,7 @@ class DriverCamera:
         self.vs = cv2.VideoCapture(self.id)
         self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.vs.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.clear()
         # start a thread to read frames from the file video stream
         self.thread = Thread(target=self.update, args=())
@@ -78,6 +79,8 @@ class DriverCamera:
         # return next frame in the queue
         # return self.Q.get(timeout = 1)
         # try:
+        if self.stopped:
+            return self.vs.read()
         return self.Q.get()
         # except Empty:
         #     pass
