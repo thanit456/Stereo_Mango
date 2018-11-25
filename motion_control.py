@@ -132,7 +132,8 @@ class Planner:
             if check_exit(): return
 
             if self.interrupt:
-                self.wait()
+                if not self.wait(100):
+                    continue
                 self.interrupt = False
 
             try:
@@ -150,10 +151,13 @@ class Planner:
                             if check_exit(): return
                             time.sleep(0.7)
 
-    def wait(self, timeout = 0): # ms
+    def clear_interrupt(self):
+        self.interrupt = False
+
+    def wait(self, timeout = 0, not_interrupt = True): # ms
         start = datetime.datetime.now()
         i = 1
-        if self.interrupt:
+        if self.interrupt and not not_interrupt:
             while self.is_moving():
                 if timeout > 0 and ((datetime.datetime.now() - start).microseconds / 1000) > timeout:
                     sys.stdout.write("\n")
@@ -162,6 +166,7 @@ class Planner:
                 i += 1
                 time.sleep(0.7)
         else:
+            self.interrupt = False
             while not self.is_empty() or self.is_moving():
                 if timeout > 0 and ((datetime.datetime.now() - start).microseconds / 1000) > timeout:
                     sys.stdout.write("\n")
@@ -341,7 +346,7 @@ class Control:
         self.is_update = False
 
     def set_position(self, motor_id, pulse, velo, error_wait = 0):
-        for i in range(len(config.MOTOR_GROUP)):
+        for i in [0, 3, 1, 4, 2]:
             ck = 0
             for id in config.MOTOR_GROUP[i]:
                 if id == motor_id:
@@ -355,6 +360,8 @@ class Control:
                         # pass
                     self.goal_pos[i] = pulse
                     self.motor[id].set_goal(pulse, velo, False)
+                if isinstance(self.motor[config.MOTOR_GROUP[i][0]], DriverMotor):
+                    self._wait(self.motor[config.MOTOR_GROUP[i][0]])
                 break
         if error_wait:
             while abs(self.motor[motor_id].get_curr()[0] - pulse) >= error_wait:
@@ -362,7 +369,7 @@ class Control:
         self.is_update = False
 
     def set_pulse(self, motor_id, pulse, velo, error_wait = 0):
-        for i in range(len(config.MOTOR_GROUP)):
+        for i in [0, 3, 1, 4, 2]:
             ck = 0
             for id in config.MOTOR_GROUP[i]:
                 if id == motor_id:
@@ -376,6 +383,8 @@ class Control:
                         pulse = plan_turn(self.position[i] - config.arm_start_position, pulse - config.arm_start_position)
                     self.goal_pos[i] = pulse
                     self.motor[id].set_goal(pulse, velo, True)
+                if isinstance(self.motor[config.MOTOR_GROUP[i][0]], DriverMotor):
+                    self._wait(self.motor[config.MOTOR_GROUP[i][0]])
                 break
         if error_wait:
             while abs(self.motor[motor_id].get_curr()[0] * self.motor[motor_id].ppmm - pulse) >= error_wait:

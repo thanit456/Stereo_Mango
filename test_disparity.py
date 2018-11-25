@@ -56,7 +56,7 @@ def get_pos_from_stereo(frame, lbox, scale=None):
     rbox, disparity = DriverStereo.find_lower_mean_r(frame[1], frame[2], lbox)
     # disparity = DriverStereo.find_disparity_from_box(lbox, rbox, frame[1].shape[:2])
     disparity = max(1, disparity)
-    diff_z = get_depth(disparity)
+    diff_z = DriverStereo.get_depth(disparity)
 
     # print (disparity, diff_z)
     

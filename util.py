@@ -40,6 +40,7 @@ def get_mango(frame, resultL, resultR, thres, track, canvas = None):
     dif_z = DriverStereo.get_depth(disparities[idx])
     dif_x = (cbox[0] + disparities[idx] / 2) - fc[0]
     dif_y = fc[1] - cbox[1]
+
     (dif_x, dif_y) = DriverStereo.get_true_depth([dif_x, dif_y], dif_z)
 
     dif_z += config.position_cam_from_end

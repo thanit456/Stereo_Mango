@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import cv2
 import imutils
+import time
 
 import sys
 from threading import Thread, Lock
@@ -17,7 +18,7 @@ import config
 REMAP_INTERPOLATION = cv2.INTER_LINEAR
 class DriverStereo:
     """docstring for DriverCamera"""
-    def __init__(self, id, queueSize = 3):
+    def __init__(self, id, queueSize = 3, fps = 30):
         self.id = id
         # initialize the queue used to store frames read from
         # the video file
@@ -26,6 +27,8 @@ class DriverStereo:
         self.rectify = True
         self._load()
         self.lock = Lock()
+
+        self.fps = fps
 
         self.vs = cv2.VideoCapture(self.id)
         self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
@@ -38,6 +41,10 @@ class DriverStereo:
     def clear(self):
         if self.Q.empty(): return
         while not self.Q.empty():
+            self.read()
+
+    def flush(self):
+        for i in range(10):
             self.read()
 
     def start(self):
@@ -65,6 +72,8 @@ class DriverStereo:
                     self.Q.put((grabbed, left, right))
             elif not self.Q.empty():
                 self.read()
+
+            time.sleep(1 / self.fps)
         self.vs.release()
 
     def read(self):
@@ -87,17 +96,21 @@ class DriverStereo:
     @staticmethod
     def get_depth(disparity = 1):
         disparity = max(1, disparity)
-        if (124<=disparity <= 167):
+        if (124 <= disparity <= 167):
             depth = 47409/disparity + 15.856
-        elif (98<=disparity<=123):
+        elif (98 <= disparity <= 123):
             depth = 49208/disparity + 0.3388
-        elif (81<=disparity<=97):
-            depth = 46381/disparity + 26.896
-        elif (69<=disparity<=80):
+        elif (81 <= disparity <= 97):
+            depth = (46381/disparity + 26.896)
+        elif (69 <= disparity <= 80):
             depth = 46044/disparity + 36.039
         else:
-            depth = 750*65.3 / disparity
+            depth = (750 * 65.3 / disparity) * 97/85
+
+        # print (depth, disparity)
         return depth
+
+        # 97/85
 
     @staticmethod
     def get_true_depth(pos, dif_z):

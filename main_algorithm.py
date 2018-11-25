@@ -28,23 +28,22 @@ cam_on_arm = DriverCamera(cam1)
 cam_end_arm = DriverStereo(cam2)
 planner = Planner().getInstance()
 
-
 tree_position = [
-    38862 / config.encoder_pulse_base_l, 
-    72753 / config.encoder_pulse_base_l,
-    72753 / config.encoder_pulse_base_l, 
-    106987 / config.encoder_pulse_base_l, 
-    106987 / config.encoder_pulse_base_l, 
-    140380 / config.encoder_pulse_base_l, 
+    38500 / config.encoder_pulse_base_l, 
+    73499 / config.encoder_pulse_base_l,
+    73499 / config.encoder_pulse_base_l, 
+    106977 / config.encoder_pulse_base_l, 
+    106977 / config.encoder_pulse_base_l, 
+    141200 / config.encoder_pulse_base_l, 
 ]
 # tree_position = [
-#     1362 / config.encoder_pulse_base_l, 
+#     7908 / config.encoder_pulse_base_l, 
 #     32555 / config.encoder_pulse_base_l, 
 # ]
 hieght = [
-    37459 / config.encoder_pulse_lift_l,
-    26236 / config.encoder_pulse_lift_l,
-    25123 / config.encoder_pulse_lift_l
+    # 30000 / config.encoder_pulse_lift_l,
+    # 26236 / config.encoder_pulse_lift_l,
+    25000 / config.encoder_pulse_lift_l
 ]
 y_pos_for_turn_arm = 40000 / config.encoder_pulse_lift_l
 
@@ -137,6 +136,7 @@ def drop_fruit(color, state):
     print ("drop fruit")
     # servo
     planner.add(Planner.CUT, [False])
+    planner.clear_interrupt()
     return ck
 
 def s1(): # turn arm into qaudrant 3th
@@ -156,37 +156,50 @@ def s4(): # turn arm into qaudrant 2nd
     planner.add(Planner.SET_POSITION, [config.TURRET_MOTOR_ID, -57.6, config.default_spd[3], 0])
 
 def s5(state):
+    planner.clear_interrupt()
     for i in [1, 1]:
         time.sleep(0.5)
         planner.wait()
         
     # task a photo by using camera on arm
-    frame = cam_end_arm.read()[1]
-    # find mango on image
-    result = yolo.detect(frame, net, 0.8, False, "MainControl")
-    # if have mango at least one
-    if 'boxes' in result:
-        visual_servo.lift_up(cam_end_arm, planner, net)
-        # create visual servo
-        vs = VisualServo(net, cam_end_arm, avoidMango, state, True) # pass the cam
-        # get result from vs
-        result = vs.start()
-        # print (result)
-        # move to drop fruit
-        if result:
-            # y_pos_before_turn = planner.get_control().get_pos()[1]
-            ck = drop_fruit(vs.get_color(), state)
-            if not ck:
+    cam_end_arm.flush()
+    frame = cam_end_arm.read()
+
+    state = 0
+    while state < 2:
+        # find mango on image
+        result = yolo.detect(frame[state + 1], net, 0.8, False, "MainControl")
+        # if have mango at least one
+        if 'boxes' in result:
+            visual_servo.lift_up(cam_end_arm, planner, net)
+            # create visual servo
+            vs = VisualServo(net, cam_end_arm, avoidMango, state, True) # pass the cam
+            # get result from vs
+            result = vs.start()
+            # print (result)
+            # move to drop fruit
+            if result:
+                # y_pos_before_turn = planner.get_control().get_pos()[1]
+                ck = drop_fruit(vs.get_color(), quadrant)
+                if not ck:
+                    print ("Can't Keep Mango")
+                    return -1
+
+                print ("Yeah!!!, We can harvest and drop mango")
+                return 1
+            else:
+                print ("VisualServo Failed")
                 return -1
-            return 1
+            # do previous state again
+            break
         else:
-            return -1
-        # do previous state again
+            state += 1
+            print ("S5", "Not Found on " + ("Left" if state < 1 else "right"))
 
     return 0
 
 def main():
-    global y_pos_before_turn
+    global y_pos_before_turn, quadrant
 
     tree_idx = -1
     quadrant = 0 # count by state - 5555
@@ -246,10 +259,8 @@ def main():
                         elif quadrant == 3: s3()
                         elif quadrant == 4: s4()
 
-
-                        for i in [1, 1]:
-                            time.sleep(0.5)
-                            planner.wait(0)
+                        planner.clear_interrupt()
+                        planner.wait(2000)
 
                         res = s5(quadrant)
                         if res == 0:
@@ -257,7 +268,7 @@ def main():
                         elif res < 0:
                             cc += 1
 
-                        if cc >= 1:
+                        if cc > 1:
                             break
                     
                 state = (quadrant % 4) + 1
@@ -274,14 +285,15 @@ def main():
 
 if __name__ == '__main__':
     try:
-        cam_on_arm.start()
+        # cam_on_arm.start()
         cam_end_arm.start()
         main()
     except Exception as e:
         print ("Error in main:", e)
     finally:
-        cam_on_arm.stop()
+        # cam_on_arm.stop()
         cam_end_arm.stop()
+        pass
     
 
     planner.stop()

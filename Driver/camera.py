@@ -23,6 +23,10 @@ class DriverCamera:
         self.Q = Queue(maxsize=max(queueSize, 2))
         self.stopped = False
 
+        self.vs = cv2.VideoCapture(self.id)
+        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.vs.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         # self.obj_points = []
         # self.img_points = []
@@ -37,11 +41,11 @@ class DriverCamera:
         while not self.Q.empty():
             self.read()
 
+    def flush(self):
+        for i in range(10):
+            self.read()
+
     def start(self):
-        self.vs = cv2.VideoCapture(self.id)
-        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        self.vs.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.clear()
         # start a thread to read frames from the file video stream
         self.thread = Thread(target=self.update, args=())

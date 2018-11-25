@@ -47,7 +47,6 @@ class VisualServo:
 
     def _get_pos(self, pos, cur_pos):
         rad = (cur_pos[3]) * np.pi / 180
-        pos[2] += config.position_cam_from_end
 
         x = pos[0] * np.sin(rad) + pos[2] * np.cos(rad)
         z = -pos[0] * np.cos(rad) + pos[2] * np.sin(rad)
@@ -61,18 +60,20 @@ class VisualServo:
 
     def loop(self, DEBUG = False):
         planner = Planner.getInstance()
-        planner.wait()
+        planner.wait(not_interrupt = True)
         
         print ("VisualServo", "Enter Loop")
 
-        thres = 0.85
+        thres = 0.5
         alpha = 0.864
         
         error_count = 0
         low_pass_count = 0
         low_pass_pos = [0, 0, 0]        
         track = None
-        while True:
+
+        self.camera.flush()
+        while error_count < config.visual_failed_count:
             if not self._is_running: return False
 
             control = planner.get_control()
@@ -93,25 +94,36 @@ class VisualServo:
             util.showImage(canvas)
             if track is None:
                 error_count += 1
+                print ("Track Faild")
                 continue
             
             depth = control.get_depth() if not DEBUG else 300
             if depth <= config.cut_length:
+                planner.clear_interrupt()
                 break
 
-            low_pass_pos[0] = low_pass_pos[0] * alpha + diff_x * (1 - alpha)
-            low_pass_pos[1] = low_pass_pos[1] * alpha + diff_y * (1 - alpha)
-            low_pass_pos[2] = low_pass_pos[2] * alpha + diff_z * (1 - alpha)
+            self.color = track[1]
+
+            if low_pass_count == 0:
+                low_pass_pos[0] = diff_x
+                low_pass_pos[1] = diff_y
+                low_pass_pos[2] = diff_z
+            else:
+                low_pass_pos[0] = low_pass_pos[0] * alpha + diff_x * (1 - alpha)
+                low_pass_pos[1] = low_pass_pos[1] * alpha + diff_y * (1 - alpha)
+                low_pass_pos[2] = low_pass_pos[2] * alpha + diff_z * (1 - alpha)
             low_pass_count += 1
+            print ("VisualServo", low_pass_pos)
             if config.visual_low_pass_count < low_pass_count:
                 x = low_pass_pos[0] + config.end_cam_offset[0] # * 0.5
                 y = low_pass_pos[1] + config.end_cam_offset[1] # * 0.5
-                z = low_pass_pos[2] * 1.1 + config.end_cam_offset[2]
+                z = low_pass_pos[2] + config.end_cam_offset[2]
 
                 print ("low pass move distance x:{}, y:{}, z:{}, d:{}".format(x, y, z, diff_z))                    
                 # get current position
                 if not control.plane_move(x, y, z, 0):
                     self._add_avoid(low_pass_pos, cur_pos)
+                    planner.clear_interrupt()
                     print ("out of range.")
                     return -1
 
@@ -171,6 +183,7 @@ def lift_up(camera, planner, net):
         planner.wait()
         time.sleep(0.7)
 
+    camera.flush()
     print ("Enter lift up")
 
     thres = 0.85
@@ -194,8 +207,7 @@ def lift_up(camera, planner, net):
                 error_c += 1
                 continue
 
-            self.color = track[1]
-
+            # dif_z -= config.position_cam_from_end
             low_pass[0] = low_pass[0] * 0.864 + dif_x * 0.136
             low_pass[1] = low_pass[1] * 0.864 + dif_y * 0.136
             low_pass[2] = low_pass[2] * 0.864 + dif_z * 0.136
@@ -207,12 +219,14 @@ def lift_up(camera, planner, net):
                 if not planner.is_moving():
                     if state  == 0:
                         print ("turn arm")
-                        control = planner.get_control()
-                        cur_pos = control.get_all_pos()
+                        cur_pos = planner.get_control().get_all_pos()
                         
-                        deg = np.arctan(low_pass[0] / low_pass[2]) * 180 / np.pi
+                        deg = np.arctan(low_pass[0] / (low_pass[2] + cur_pos[4])) * 180 / np.pi
+                        deg *= -1
                         turn = cur_pos[3] + deg
-                        control.set_position(config.TURRET_MOTOR_ID, turn, config.default_spd[3], 0)
+                        planner.get_control().set_position(config.TURRET_MOTOR_ID, turn, config.default_spd[3], 0)
+                        planner.wait()
+                        camera.flush()
 
                         state = 1
                     elif state == 1:
@@ -220,6 +234,7 @@ def lift_up(camera, planner, net):
 
                         planner.get_control().plane_move(0, low_pass[1], 0, 0)
                         planner.wait()
+                        camera.flush()
                         ck = 1
                         break
 

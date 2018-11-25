@@ -27,7 +27,7 @@ encoder_pulse_middle    = (175 * 1024 * 4) / (8 * 20)
 encoder_pulse_turret    = (2000 * 4) / 360
 encoder_pulse_forward   = (175 * 1024 * 4) / (5 * 24)
 
-default_spd = [540*2/3, 2, 2, 2, 540]
+default_spd = [540*3/4, 2, 2, 2, 540*2/3]
 k_moving_threshold = 1.5
 _moving_threshold = {
 	BASE_MOTOR_ID_L: default_spd[2] * k_moving_threshold,
@@ -74,7 +74,7 @@ servo_cutter_open       = 2000
 drop_position = {
     MIDDLE_MOTOR_ID: [0, 24.4140625, 1232.91015625, workspace_x],
     TURRET_MOTOR_ID: [180, 180, 0, 0],
-    FORWARD_MOTOR_ID: [119.018554688, 0, 0, 109.86328125],
+    FORWARD_MOTOR_ID: [129.018554688, 0, 0, 109.86328125],
 }
 
 # Section arm configure
@@ -97,24 +97,10 @@ avoid_range = 300
 
 # section visual servo
 # visual_max_move = 10 # mm  # tune
-visual_failed_count = 15  # tune
-visual_low_pass_count = 10
+visual_failed_count = 4  # tune
+visual_low_pass_count = 7
 
-# object tracking
-object_tracker = 'kcf' # kcf, csrt, boosting, mil, tld, mediainflow, mosse
-object_track_count = 10
-
-end_cam_offset = np.array([0, 70, 70], dtype=np.float64) # x, y
+end_cam_offset = np.array([0, 80, 100], dtype=np.float64) # x, y
 arm_cam_offset = np.array([0, 0, 0], dtype=np.float64) # x, y
 
-# section state move turret for find max score
-# deg_find_score = 0.5# deg  # tunev
-
-# section operate basket
-# cut_count = 2
-cut_length = 160
-
-# section general
-# default_speed = 50 # mm/s  # not use in new control
-# accept_move = 100 # mm  # tune
-# moving_threshold = 20 # mm/ s  # tune
+cut_length = 200
