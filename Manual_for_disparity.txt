@@ -7,7 +7,7 @@ Prerequisite:
 
 Crucial file for finding depth
 1.DataStereo.xlsx (collecting and analysing data)
-2.In FRA-logic
+2.In FRA-logic(****branch:new_control******)
 	-Driver>stereo.py
 	-util.py 
 	-yolo 
