@@ -1,0 +1,18 @@
+Manual for mango detection(based on python3)
+
+Prerequisite:
+-OpenCV
+-yolo34py
+-cuda
+
+Crucial file for finding depth
+1.DataStereo.xlsx (collecting and analysing data)
+2.In FRA-logic
+	-Driver>stereo.py
+	-util.py 
+	-yolo 
+
+
+How to run this program to display depth
+-cd /FRA-logic
+-python3 test_disparity.py 
